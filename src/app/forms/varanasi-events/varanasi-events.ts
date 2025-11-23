@@ -4,7 +4,6 @@ import {
   OnInit,
   ElementRef,
   HostListener,
-  ViewChild
 } from '@angular/core';
 import {
   FormBuilder,
@@ -22,6 +21,7 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { SelectModule } from 'primeng/select';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { ButtonModule } from 'primeng/button';
+import { ReCaptchaV3Service, RecaptchaV3Module, RECAPTCHA_V3_SITE_KEY } from 'ng-recaptcha';
 import { Supabase } from '../../services/supabase';
 import { countries } from 'countries-list';
 import {
@@ -31,6 +31,7 @@ import {
   getExampleNumber,
 } from 'libphonenumber-js';
 import examples from 'libphonenumber-js/mobile/examples';
+import { firstValueFrom } from 'rxjs';
 
 interface Country {
   name: string;
@@ -58,6 +59,7 @@ interface Option {
     SelectModule,
     SelectButtonModule,
     ButtonModule,
+    RecaptchaV3Module
   ],
 })
 export class VaranasiEvents implements OnInit {
@@ -79,7 +81,8 @@ export class VaranasiEvents implements OnInit {
     private fb: FormBuilder,
     private supabase: Supabase,
     private cd: ChangeDetectorRef,
-    private el: ElementRef
+    private el: ElementRef,
+    private recaptchaV3Service: ReCaptchaV3Service
   ) { }
 
   ngOnInit(): void {
@@ -325,13 +328,87 @@ export class VaranasiEvents implements OnInit {
   }
 
   /** Submit Form */
+  /** Submit Form */
   async onSubmit(): Promise<void> {
     this.submitted = true;
     this.loading = true;
     this.submissionError = '';
-
     this.cd.detectChanges();
 
+    try {
+      // 1) Run reCAPTCHA v3
+      const token = await firstValueFrom(
+        this.recaptchaV3Service.execute('submit')
+      );
+
+      // Token Generation Failed
+      if (!token) {
+        this.submissionError = '[EC-TGF-01] We were unable to process your registration at this time. Please try again shortly.';
+        this.loading = false;
+        this.cd.detectChanges();
+        return;
+      }
+
+      // 2) Verify token on live Supabase Edge Function
+      const verifyResp = await fetch(
+        'https://blopfvarveykkggbpkfr.supabase.co/functions/v1/recaptcha-verify',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ token })
+        }
+      );
+
+      // Token Verification Failed
+      if (!verifyResp.ok) {
+        await verifyResp.json().catch(() => ({}));
+        this.submissionError = '[EC-TVF-01] We were unable to process your registration at this time. Please try again shortly.';
+        this.loading = false;
+        this.cd.detectChanges();
+        return;
+      }
+
+      const verifyData = await verifyResp.json();
+
+      // Token Verification Failed on Server
+      if (!verifyData.success) {
+        this.submissionError = '[EC-SVF-03] We were unable to process your registration at this time. Please try again shortly.';
+        this.loading = false;
+        this.cd.detectChanges();
+        return;
+      }
+
+      // 4) Continue with form submission
+      await this.processFormSubmission(token);
+
+    } catch (err: any) {
+      this.submissionError =
+        '[EC-GE-04] We were unable to process your registration at this time. Please try again shortly.';
+    } finally {
+      this.loading = false;
+      this.scrollToTop();
+      this.cd.detectChanges();
+    }
+  }
+
+
+
+  resetForm(): void {
+    const defaultCountry = this.getCountryByIso('IN');
+    this.accompanyingParticipants.clear();
+    this.initializeForm(defaultCountry);
+    this.registrationSuccess = false;
+    this.submissionError = '';
+    this.submitted = false;
+  }
+
+  private scrollToTop(): void {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  private async processFormSubmission(token: string): Promise<void> {
     const mainMobile = this.registerForm.get('mobile_number')!;
     const mainCountry: Country | null =
       this.registerForm.get('country_code')!.value;
@@ -440,18 +517,5 @@ export class VaranasiEvents implements OnInit {
       this.loading = false;
       this.cd.detectChanges();
     }
-  }
-
-  resetForm(): void {
-    const defaultCountry = this.getCountryByIso('IN');
-    this.accompanyingParticipants.clear();
-    this.initializeForm(defaultCountry);
-    this.registrationSuccess = false;
-    this.submissionError = '';
-    this.submitted = false;
-  }
-
-  private scrollToTop(): void {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 }
