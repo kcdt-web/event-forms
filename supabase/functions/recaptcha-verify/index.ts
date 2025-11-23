@@ -1,6 +1,3 @@
-// Edge Function — recaptcha-verify
-// Verifies reCAPTCHA v3 token with Google
-
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 
 serve(async (req) => {

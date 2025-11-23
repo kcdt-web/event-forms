@@ -21,8 +21,7 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { SelectModule } from 'primeng/select';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { ButtonModule } from 'primeng/button';
-import { ReCaptchaV3Service, RecaptchaV3Module, RECAPTCHA_V3_SITE_KEY } from 'ng-recaptcha';
-import { Supabase } from '../../services/supabase';
+import { ReCaptchaV3Service } from 'ng-recaptcha';
 import { countries } from 'countries-list';
 import {
   CountryCode,
@@ -32,6 +31,7 @@ import {
 } from 'libphonenumber-js';
 import examples from 'libphonenumber-js/mobile/examples';
 import { firstValueFrom } from 'rxjs';
+import { environment } from '../../../environments/environment.prod';
 
 interface Country {
   name: string;
@@ -59,7 +59,6 @@ interface Option {
     SelectModule,
     SelectButtonModule,
     ButtonModule,
-    RecaptchaV3Module
   ],
 })
 export class VaranasiEvents implements OnInit {
@@ -79,7 +78,6 @@ export class VaranasiEvents implements OnInit {
 
   constructor(
     private fb: FormBuilder,
-    private supabase: Supabase,
     private cd: ChangeDetectorRef,
     private el: ElementRef,
     private recaptchaV3Service: ReCaptchaV3Service
@@ -176,9 +174,7 @@ export class VaranasiEvents implements OnInit {
 
   /** Participants array getter */
   get accompanyingParticipants(): FormArray {
-    return this.registerForm.get(
-      'accompanyingParticipants'
-    ) as FormArray;
+    return this.registerForm.get('accompanyingParticipants') as FormArray;
   }
 
   /** Add participant row */
@@ -206,16 +202,11 @@ export class VaranasiEvents implements OnInit {
 
     /** participant phone validation on blur */
     phoneCtrl.valueChanges.subscribe((value) => {
-
       const country = participant.get('country_code')!.value as Country | null;
-      if (!country) return;
+      if (!country || phoneCtrl.pristine || !value) return;
 
-      if (phoneCtrl.pristine || !value) return;
-
-      const valid = isValidPhoneNumber(
-        String(value),
-        country.iso2 as CountryCode
-      ) && String(value).length === this.mobileNumberMaxLength;
+      const valid = isValidPhoneNumber(String(value), country.iso2 as CountryCode) &&
+        String(value).length === this.mobileNumberMaxLength;
 
       if (!valid) phoneCtrl.setErrors({ invalidPhone: true });
       else phoneCtrl.setErrors(null);
@@ -224,7 +215,6 @@ export class VaranasiEvents implements OnInit {
     this.accompanyingParticipants.push(participant);
   }
 
-
   removeParticipant(index: number): void {
     if (window.confirm('Are you sure you want to remove this participant?')) {
       this.accompanyingParticipants.removeAt(index);
@@ -232,11 +222,7 @@ export class VaranasiEvents implements OnInit {
   }
 
   /** Dynamically assign validators based on country selection */
-  private setMobileValidators(
-    control: AbstractControl,
-    countryIso2?: string,
-    required = false
-  ): void {
+  private setMobileValidators(control: AbstractControl, countryIso2?: string, required = false): void {
     const validators = [
       ...(required ? [Validators.required] : []),
       Validators.pattern('^[0-9]*$'),
@@ -244,7 +230,6 @@ export class VaranasiEvents implements OnInit {
       Validators.maxLength(this.mobileNumberMaxLength),
       this.optionalPhoneValidator(countryIso2),
     ];
-
     control.setValidators(validators);
   }
 
@@ -252,12 +237,7 @@ export class VaranasiEvents implements OnInit {
   private optionalPhoneValidator(countryIso2?: string) {
     return (control: AbstractControl) => {
       if (!control.value) return null;
-
-      const valid = isValidPhoneNumber(
-        String(control.value),
-        countryIso2 as CountryCode
-      );
-
+      const valid = isValidPhoneNumber(String(control.value), countryIso2 as CountryCode);
       return valid ? null : { invalidPhone: true };
     };
   }
@@ -265,28 +245,19 @@ export class VaranasiEvents implements OnInit {
   /** Listen to main form changes */
   private handleFormChanges(): void {
     const mobileCtrl = this.registerForm.get('mobile_number')!;
-
-    this.registerForm.get('country_code')!.valueChanges.subscribe(
-      (country: Country | null) => {
-        if (!country) return;
-
-        this.updatePhoneLength(country.iso2);
-
-        this.setMobileValidators(mobileCtrl, country.iso2, true);
-        mobileCtrl.updateValueAndValidity();
-      }
-    );
+    this.registerForm.get('country_code')!.valueChanges.subscribe((country: Country | null) => {
+      if (!country) return;
+      this.updatePhoneLength(country.iso2);
+      this.setMobileValidators(mobileCtrl, country.iso2, true);
+      mobileCtrl.updateValueAndValidity();
+    });
 
     mobileCtrl.valueChanges.subscribe((value) => {
       const country: Country = this.registerForm.get('country_code')!.value;
-      if (!country) return;
+      if (!country || mobileCtrl.pristine) return;
 
-      if (this.registerForm.get("mobile_number")?.pristine) return;
-
-      const valid = isValidPhoneNumber(
-        String(value),
-        country.iso2 as CountryCode
-      ) && String(value).length === this.mobileNumberMaxLength;
+      const valid = isValidPhoneNumber(String(value), country.iso2 as CountryCode) &&
+        String(value).length === this.mobileNumberMaxLength;
 
       this.invalidPhoneNumber = !valid;
       this.mobileNumberErrorMsg = valid ? '' : 'Invalid phone number.';
@@ -296,15 +267,9 @@ export class VaranasiEvents implements OnInit {
   /** Dynamic phone length from example number */
   private updatePhoneLength(countryIso2?: string): void {
     if (!countryIso2) return;
-
     try {
-      const example = getExampleNumber(
-        countryIso2 as CountryCode,
-        examples
-      );
-
+      const example = getExampleNumber(countryIso2 as CountryCode, examples);
       const length = example?.nationalNumber?.length;
-
       this.mobileNumberMaxLength = length || 15;
     } catch {
       this.mobileNumberMaxLength = 15;
@@ -316,10 +281,9 @@ export class VaranasiEvents implements OnInit {
     const firstInvalidControl: HTMLElement | null = this.el.nativeElement.querySelector(
       'form .ng-invalid.p-component'
     );
-
     if (firstInvalidControl) {
       const innerInput = firstInvalidControl.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
-        'input, textarea, select',
+        'input, textarea, select'
       );
       const focusableElement: HTMLElement = innerInput || firstInvalidControl;
       focusableElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -327,7 +291,6 @@ export class VaranasiEvents implements OnInit {
     }
   }
 
-  /** Submit Form */
   /** Submit Form */
   async onSubmit(): Promise<void> {
     this.submitted = true;
@@ -337,63 +300,37 @@ export class VaranasiEvents implements OnInit {
 
     try {
       // 1) Run reCAPTCHA v3
-      const token = await firstValueFrom(
-        this.recaptchaV3Service.execute('submit')
-      );
+      const token = await firstValueFrom(this.recaptchaV3Service.execute('submit'));
+      if (!token) throw new Error('reCAPTCHA failed');
 
-      // Token Generation Failed
-      if (!token) {
-        this.submissionError = '[EC-TGF-01] We were unable to process your registration at this time. Please try again shortly.';
-        this.loading = false;
-        this.cd.detectChanges();
-        return;
-      }
-
-      // 2) Verify token on live Supabase Edge Function
+      // 2) Verify token on server (Edge Function)
       const verifyResp = await fetch(
         'https://blopfvarveykkggbpkfr.supabase.co/functions/v1/recaptcha-verify',
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ token })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
         }
       );
 
-      // Token Verification Failed
-      if (!verifyResp.ok) {
-        await verifyResp.json().catch(() => ({}));
-        this.submissionError = '[EC-TVF-01] We were unable to process your registration at this time. Please try again shortly.';
-        this.loading = false;
-        this.cd.detectChanges();
-        return;
-      }
-
       const verifyData = await verifyResp.json();
-
-      // Token Verification Failed on Server
-      if (!verifyData.success) {
-        this.submissionError = '[EC-SVF-03] We were unable to process your registration at this time. Please try again shortly.';
+      if (!verifyResp.ok || !verifyData.success) {
+        this.submissionError = '[EC-TVF] Verification failed';
         this.loading = false;
         this.cd.detectChanges();
         return;
       }
 
-      // 4) Continue with form submission
-      await this.processFormSubmission(token);
-
+      // 3) Process form submission via Edge Function
+      await this.processFormSubmission();
     } catch (err: any) {
-      this.submissionError =
-        '[EC-GE-04] We were unable to process your registration at this time. Please try again shortly.';
+      this.submissionError = '[EC-GE] ' + (err?.message || 'Unknown error');
     } finally {
       this.loading = false;
       this.scrollToTop();
       this.cd.detectChanges();
     }
   }
-
-
 
   resetForm(): void {
     const defaultCountry = this.getCountryByIso('IN');
@@ -408,18 +345,16 @@ export class VaranasiEvents implements OnInit {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  private async processFormSubmission(token: string): Promise<void> {
+  /** NEW: Process submission via Edge Function */
+  private async processFormSubmission(): Promise<void> {
     const mainMobile = this.registerForm.get('mobile_number')!;
-    const mainCountry: Country | null =
-      this.registerForm.get('country_code')!.value;
+    const mainCountry: Country | null = this.registerForm.get('country_code')!.value;
 
     const mainValid =
       mainMobile.value &&
       mainCountry &&
-      isValidPhoneNumber(
-        String(mainMobile.value),
-        mainCountry.iso2 as CountryCode
-      ) && String(mainMobile.value).length === this.mobileNumberMaxLength;
+      isValidPhoneNumber(String(mainMobile.value), mainCountry.iso2 as CountryCode) &&
+      String(mainMobile.value).length === this.mobileNumberMaxLength;
 
     if (!mainValid) {
       mainMobile.setErrors({ invalidPhone: true });
@@ -427,34 +362,21 @@ export class VaranasiEvents implements OnInit {
       this.mobileNumberErrorMsg = 'Invalid phone number.';
       this.registerForm.markAllAsTouched();
       this.scrollToFirstInvalidField();
-      this.loading = false;
-      this.cd.detectChanges();
       return;
     }
 
     if (this.registerForm.invalid) {
       this.registerForm.markAllAsTouched();
       this.scrollToFirstInvalidField();
-      this.loading = false;
-      this.cd.detectChanges();
       return;
     }
 
     /** Validate participant phones */
     let validParticipants = true;
-
     this.accompanyingParticipants.controls.forEach((p) => {
       const mobileCtrl = p.get('mobile_number')!;
       const country: Country = p.get('country_code')!.value;
-
-      if (
-        mobileCtrl.value &&
-        country &&
-        !isValidPhoneNumber(
-          String(mobileCtrl.value),
-          country.iso2 as CountryCode
-        )
-      ) {
+      if (mobileCtrl.value && country && !isValidPhoneNumber(String(mobileCtrl.value), country.iso2 as CountryCode)) {
         mobileCtrl.setErrors({ invalidPhone: true });
         validParticipants = false;
       }
@@ -462,60 +384,52 @@ export class VaranasiEvents implements OnInit {
 
     if (!validParticipants) {
       this.scrollToFirstInvalidField();
-      this.loading = false;
-      this.cd.detectChanges();
       return;
     }
 
-    /** Prepare submission */
-    try {
-      const mainData = {
-        kcdt_member_id: this.registerForm.value.kcdt_member_id,
-        full_name: this.registerForm.value.full_name,
-        country_code: mainCountry?.iso2,
-        mobile_number:
-          parsePhoneNumberFromString(
-            String(mainMobile.value),
-            mainCountry.iso2 as CountryCode
-          )?.nationalNumber || mainMobile.value,
-        gender: this.registerForm.value.gender,
-        activities: this.registerForm.value.activities,
+    /** Prepare payload */
+    const mainData = {
+      kcdt_member_id: this.registerForm.value.kcdt_member_id,
+      full_name: this.registerForm.value.full_name,
+      country_code: mainCountry?.iso2,
+      mobile_number:
+        parsePhoneNumberFromString(String(mainMobile.value), mainCountry.iso2 as CountryCode)?.nationalNumber || mainMobile.value,
+      gender: this.registerForm.value.gender,
+      activities: this.registerForm.value.activities,
+    };
+
+    const accompData = this.accompanyingParticipants.controls.map((p) => {
+      let num = p.value.mobile_number;
+      const country: Country = p.get('country_code')!.value;
+      if (num && country) {
+        try {
+          num = parsePhoneNumberFromString(String(num), country.iso2 as CountryCode)?.nationalNumber || num;
+        } catch { }
+      }
+      return {
+        kcdt_member_id: p.value.kcdt_member_id,
+        full_name: p.value.full_name,
+        country_code: country.iso2,
+        mobile_number: num,
+        gender: p.value.gender,
+        activities: p.value.activities,
       };
+    });
 
-      const accompData = this.accompanyingParticipants.controls.map((p) => {
-        let num = p.value.mobile_number;
-        const country: Country = p.get('country_code')!.value;
-
-        if (num && country) {
-          try {
-            num =
-              parsePhoneNumberFromString(
-                String(num),
-                country.iso2 as CountryCode
-              )?.nationalNumber || num;
-          } catch { }
-        }
-
-        return {
-          kcdt_member_id: p.value.kcdt_member_id,
-          full_name: p.value.full_name,
-          country_code: country.iso2,
-          mobile_number: num,
-          gender: p.value.gender,
-          activities: p.value.activities,
-        };
+    /** Call Edge Function */
+    try {
+      const resp = await fetch(environment.registerEdgeFunction, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mainData, accompData }),
       });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.error || 'Registration failed');
 
-      await this.supabase.upsertParticipant(mainData, accompData);
       this.registrationSuccess = true;
       this.scrollToTop();
     } catch (err: any) {
-      this.submissionError =
-        'Error saving registration: ' +
-        (err?.message || 'Unknown error');
-    } finally {
-      this.loading = false;
-      this.cd.detectChanges();
+      this.submissionError = 'Error saving registration: ' + (err?.message || 'Unknown error');
     }
   }
 }
