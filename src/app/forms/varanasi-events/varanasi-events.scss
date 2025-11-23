@@ -1,0 +1,41 @@
+::ng-deep {
+
+    .activities .p-togglebutton .p-togglebutton-content {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    select.form-select {
+        color: var(--p-select-color);
+        font-size: 16px;
+    }
+
+    input.ng-invalid.ng-touched,
+    .p-inputtext.invalid-phone-number,
+    .p-inputnumber.ng-invalid.ng-touched .p-inputtext,
+    .p-dropdown.ng-invalid.ng-touched .p-dropdown-label,
+    .p-selectbutton.ng-invalid.ng-touched {
+        border: 1px solid var(--bs-danger) !important;
+        box-shadow: 0 0 2px var(--bs-danger);
+    }
+
+
+    .kcdt-primary-button.p-button {
+        border-color: var(--kcd-button-primary);
+        background-color: var(--kcd-button-primary);
+        color: var(--kcd-sacred-white);
+        transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .kcdt-primary-button.p-button:not(:disabled):hover {
+        border-color: var(--kcd-button-primary-hover);
+        background-color: var(--kcd-button-primary-hover);
+    }
+
+    .kcdt-primary-button.p-button:not(:disabled):active {
+        border-color: var(--kcd-button-primary-active);
+        background-color: var(--kcd-button-primary-active);
+    }
+
+}

@@ -1,1 +1,10 @@
-/* You can add global styles to this file, and also import other style files */
+@import "bootstrap/scss/bootstrap";
+@import "primeicons/primeicons.css";
+
+#pageTitle {
+    display: none;
+}
+
+fieldset {
+    background-color: var(--kcd-sacred-white, #f0f0f0);
+}
