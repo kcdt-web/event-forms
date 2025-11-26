@@ -1,0 +1,157 @@
+<!-- Alert for errors -->
+<div *ngIf="submissionError" class="alert alert-danger">
+    {{ submissionError }}
+</div>
+
+<!-- Success message -->
+@if (registrationSuccess) {
+<div class="alert p-4">
+    <h1>Registration Submitted Successfully!</h1>
+    <p>All future updates and important information regarding the event will be sent to the mobile number you provided
+        at the time of registration.</p>
+    <p>We look forward to your participation.</p>
+    <!-- <a class="btn btn-primary" href="/varanasi-event/">Back to event details</a> -->
+</div>
+} @else {
+<h1>Gayathri Havanam!</h1>
+<p class="mb-4"><span class="text-danger fw-bold">Note:</span> Performing Gayatri Japam daily after Sandhyavandanam,
+    with a
+    sankalpa for universal
+    peace, is required
+    and mandatory for registration as part of the Shanti Homam. If you haven't started yet, begin today. For
+    instructions, call <a href="tel:+919494877171">9494877171</a>.
+</p>
+
+<!-- Registration form -->
+<form [formGroup]="registerForm" (ngSubmit)="onSubmit()">
+    <!-- Main Participant -->
+    <fieldset class="border rounded p-4 mb-4">
+        <legend class="h5 m-0 mb-4">Tell us about you</legend>
+
+        <!-- KCDT Member ID -->
+        <div class="mb-4">
+            <p-floatlabel variant="on">
+                <p-inputnumber mode="decimal" inputId="member_id" [useGrouping]="false" inputStyleClass="form-control"
+                    fluid="true" formControlName="kcdt_member_id"></p-inputnumber>
+                <label for="member_id" class="form-label d-block">KCDT Member ID <span
+                        class="text-danger">*</span></label>
+            </p-floatlabel>
+            <div *ngIf="registerForm.get('kcdt_member_id')?.touched && registerForm.get('kcdt_member_id')?.invalid"
+                class="form-text text-danger">
+                KCDT Member ID is required.
+            </div>
+        </div>
+
+        <!-- Full Name -->
+        <div class="mb-4">
+            <p-floatlabel variant="on">
+                <input id="full_name" pInputText fluid="true" required formControlName="full_name" />
+                <label for="full_name">Full name <span class="text-danger">*</span></label>
+            </p-floatlabel>
+            <div *ngIf="registerForm.get('full_name')?.touched && registerForm.get('full_name')?.invalid"
+                class="form-text text-danger">
+                Name is required.
+            </div>
+        </div>
+
+        <!-- Country Code & Mobile Number -->
+        <div class="mb-4">
+            <div class="d-flex flex-column flex-md-row gap-2">
+
+                <!-- PrimeNG select (DESKTOP only) -->
+                <p-floatlabel *ngIf="!isMobile" variant="on">
+                    <p-select inputId="country_code" [options]="countriesList" optionLabel="displayName" filter
+                        filterBy="displayName" fluid formControlName="country_code" required appendTo="self">
+                    </p-select>
+                    <label for="country_code">Country Code <span class="text-danger">*</span></label>
+                </p-floatlabel>
+
+                <!-- Native select (MOBILE only) -->
+                <div *ngIf="isMobile" class="flex-fill">
+                    <label class="form-label fw-semibold mb-2 d-block">Country Code <span
+                            class="text-danger">*</span></label>
+                    <select class="form-select form-select-lg mb-2" formControlName="country_code" required>
+                        <option *ngFor="let country of countriesList" [ngValue]="country">
+                            {{ country.displayName }}
+                        </option>
+                    </select>
+                </div>
+
+                <!-- Mobile number -->
+                <p-floatlabel variant="on" class="flex-fill">
+                    <p-inputnumber mode="decimal" inputId="mobile_number" [useGrouping]="false" fluid="true"
+                        [inputStyleClass]="invalidPhoneNumber ? 'form-control invalid-phone-number' : 'form-control'"
+                        [minlength]="mobileNumberMinLength" [maxlength]="mobileNumberMaxLength"
+                        formControlName="mobile_number" required>
+                    </p-inputnumber>
+                    <label for="mobile_number">Mobile number (WhatsApp) <span class="text-danger">*</span></label>
+                </p-floatlabel>
+
+            </div>
+
+            <div *ngIf="invalidPhoneNumber || (registerForm.get('mobile_number')?.touched && registerForm.get('mobile_number')?.invalid)"
+                class="form-text text-danger">
+                {{ mobileNumberErrorMsg }}
+            </div>
+            <div class="form-text">
+                All communications will be sent to this number.
+            </div>
+        </div>
+    </fieldset>
+
+    <!-- Activities Selection -->
+    <fieldset class="border rounded p-4 mb-4">
+        <legend class="h5 m-0 mb-2">Which all days you will be attending the Gayatri Havanam? <span
+                class="text-danger">*</span>
+        </legend>
+        <div>
+            <div class="d-flex text-muted small gap-2 align-items-center mb-4">
+                <i class="pi pi-info-circle"></i>
+                <span>Select at least one day from the options below.</span>
+            </div>
+
+            <p-panel header="Day 1 - 14 March 2026 ({{ getSelectedCount('day1') }} of 4 selected)" [toggleable]="true"
+                class="mb-4">
+                <div formGroupName="activities">
+                    <p-selectbutton id="activities-day1" [options]="day1Slots" optionLabel="name" optionValue="value"
+                        multiple="true" styleClass="border rounded" class="d-flex gap-2 activities"
+                        formControlName="day1"
+                        [ngClass]="{'p-invalid': registerForm.get('activities')?.errors?.['noDaysSelected'] && (registerForm.get('activities')?.touched || registerForm.get('activities')?.dirty)}">
+                    </p-selectbutton>
+                </div>
+            </p-panel>
+
+            <p-panel header="Day 2 - 15 March 2026 ({{ getSelectedCount('day2') }} of 4 selected)" [toggleable]="true"
+                class="mb-4">
+                <div formGroupName="activities">
+                    <p-selectbutton id="activities-day2" [options]="day2Slots" optionLabel="name" optionValue="value"
+                        multiple="true" styleClass="border rounded" class="d-flex gap-2 activities"
+                        formControlName="day2"
+                        [ngClass]="{'p-invalid': registerForm.get('activities')?.errors?.['noDaysSelected'] && (registerForm.get('activities')?.touched || registerForm.get('activities')?.dirty)}">
+                    </p-selectbutton>
+                </div>
+            </p-panel>
+
+            <p-panel header="Day 3 - 16 March 2026 ({{ getSelectedCount('day3') }} of 2 selected)" [toggleable]="true">
+                <div formGroupName="activities">
+                    <p-selectbutton id="activities-day3" [options]="day3Slots" optionLabel="name" optionValue="value"
+                        multiple="true" styleClass="border rounded" class="d-flex gap-2 activities"
+                        formControlName="day3"
+                        [ngClass]="{'p-invalid': registerForm.get('activities')?.errors?.['noDaysSelected'] && (registerForm.get('activities')?.touched || registerForm.get('activities')?.dirty)}">
+                    </p-selectbutton>
+                </div>
+            </p-panel>
+
+            <div *ngIf="(registerForm.get('activities')?.touched || registerForm.get('activities')?.dirty) 
+            && registerForm.get('activities')?.errors?.['noDaysSelected']" class="text-danger">
+                Please select at least one day.
+            </div>
+
+
+        </div>
+    </fieldset>
+
+    <!-- Submit Button -->
+    <p-button styleClass="kcdt-primary-button" type="submit" label="Register" [loading]="loading"></p-button>
+</form>
+}

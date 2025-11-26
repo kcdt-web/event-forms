@@ -6,4 +6,5 @@ export const environment = {
     registerEdgeFunction: 'https://blopfvarveykkggbpkfr.supabase.co/functions/v1/register-participant',
     varanasiPrimaryTable: "varanasi_events_primary_participants",
     varanasiAccompanyingTable: "varanasi_event_accompanying_participants",
+    gayathriHavanamRegistrationEdgeFunction: "https://pxjvvcdfaaakyuglmvig.supabase.co/functions/v1/gayathri-havanam-registrations"
 };
