@@ -381,27 +381,27 @@ export class GayathriHavanam implements OnInit {
     this.cd.detectChanges();
 
     try {
-      // // 1) Run reCAPTCHA v3
-      // const token = await firstValueFrom(this.recaptchaV3Service.execute('submit'));
-      // if (!token) throw new Error('reCAPTCHA failed');
+      // 1) Run reCAPTCHA v3
+      const token = await firstValueFrom(this.recaptchaV3Service.execute('submit'));
+      if (!token) throw new Error('reCAPTCHA failed');
 
-      // // 2) Verify token on server (Edge Function)
-      // const verifyResp = await fetch(
-      //   'https://blopfvarveykkggbpkfr.supabase.co/functions/v1/recaptcha-verify',
-      //   {
-      //     method: 'POST',
-      //     headers: { 'Content-Type': 'application/json' },
-      //     body: JSON.stringify({ token }),
-      //   }
-      // );
+      // 2) Verify token on server (Edge Function)
+      const verifyResp = await fetch(
+        'https://blopfvarveykkggbpkfr.supabase.co/functions/v1/recaptcha-verify',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        }
+      );
 
-      // const verifyData = await verifyResp.json();
-      // if (!verifyResp.ok || !verifyData.success) {
-      //   this.submissionError = '[EC-TVF] Verification failed';
-      //   this.loading = false;
-      //   this.cd.detectChanges();
-      //   return;
-      // }
+      const verifyData = await verifyResp.json();
+      if (!verifyResp.ok || !verifyData.success) {
+        this.submissionError = '[EC-TVF] Verification failed';
+        this.loading = false;
+        this.cd.detectChanges();
+        return;
+      }
 
       // 3) Process form submission via Edge Function
       await this.processFormSubmission();
