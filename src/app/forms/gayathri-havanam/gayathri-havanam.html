@@ -101,50 +101,82 @@
 
     <!-- Activities Selection -->
     <fieldset class="border rounded p-4 mb-4">
-        <legend class="h5 m-0 mb-2">Which all days you will be attending the Gayatri Havanam? <span
+        <legend class="h5 m-0 mb-2">Which day(s) will you be attending the Gayatri Havanam? <span
                 class="text-danger">*</span>
         </legend>
         <div>
             <div class="d-flex text-muted small gap-2 align-items-center mb-4">
                 <i class="pi pi-info-circle"></i>
-                <span>Select at least one day from the options below.</span>
+                <span>Select at least one 1-hour slot from the options below.</span>
             </div>
 
-            <p-panel header="Day 1 - 14 March 2026 ({{ getSelectedCount('day1') }} of 4 selected)" [toggleable]="true"
-                class="mb-4">
-                <div formGroupName="activities">
-                    <p-selectbutton id="activities-day1" [options]="day1Slots" optionLabel="name" optionValue="value"
-                        multiple="true" styleClass="border rounded" class="d-flex gap-2 activities"
-                        formControlName="day1"
-                        [ngClass]="{'p-invalid': registerForm.get('activities')?.errors?.['noDaysSelected'] && (registerForm.get('activities')?.touched || registerForm.get('activities')?.dirty)}">
-                    </p-selectbutton>
-                </div>
-            </p-panel>
+            @if (slots && slots.length > 0) {
+            <div>
+                <p-panel header="Day 1 - 14 March 2026 ({{ getSelectedCount('day1') }} of 4 selected)"
+                    [toggleable]="true" class="mb-4">
+                    <div formGroupName="activities">
+                        <p-selectbutton id="activities-day1" [options]="day1Slots" multiple="true"
+                            styleClass="border rounded" class="d-flex flex-row flex-wrap gap-2 activities"
+                            formControlName="day1" optionLabel="slot_time" optionValue="slot_time"
+                            optionDisabled="disabled"
+                            [ngClass]="{'p-invalid': registerForm.get('activities')?.errors?.['noDaysSelected'] && (registerForm.get('activities')?.touched || registerForm.get('activities')?.dirty)}">
+                            <ng-template #item let-item>
+                                <div class="d-flex flex-column justify-content-center align-items-center gap-2">
+                                    <div class="fw-semibold">{{item.slot_time}}</div>
+                                    <div class="small fw-regular"
+                                        [ngClass]="item.disabled ? 'text-muted' : 'text-success'">
+                                        {{item.remaining}} available</div>
+                                </div>
+                            </ng-template>
+                        </p-selectbutton>
+                    </div>
+                </p-panel>
 
-            <p-panel header="Day 2 - 15 March 2026 ({{ getSelectedCount('day2') }} of 4 selected)" [toggleable]="true"
-                class="mb-4">
-                <div formGroupName="activities">
-                    <p-selectbutton id="activities-day2" [options]="day2Slots" optionLabel="name" optionValue="value"
-                        multiple="true" styleClass="border rounded" class="d-flex gap-2 activities"
-                        formControlName="day2"
-                        [ngClass]="{'p-invalid': registerForm.get('activities')?.errors?.['noDaysSelected'] && (registerForm.get('activities')?.touched || registerForm.get('activities')?.dirty)}">
-                    </p-selectbutton>
-                </div>
-            </p-panel>
+                <p-panel header="Day 2 - 15 March 2026 ({{ getSelectedCount('day2') }} of 4 selected)"
+                    [toggleable]="true" class="mb-4">
+                    <div formGroupName="activities">
+                        <p-selectbutton id="activities-day2" [options]="day2Slots" multiple="true"
+                            styleClass="border rounded" class="d-flex flex-row flex-wrap gap-2 activities"
+                            formControlName="day2"
+                            [ngClass]="{'p-invalid': registerForm.get('activities')?.errors?.['noDaysSelected'] && (registerForm.get('activities')?.touched || registerForm.get('activities')?.dirty)}">
+                            <ng-template #item let-item>
+                                <div class="d-flex flex-column justify-content-center align-items-center gap-2">
+                                    <div class="fw-semibold">{{item.slot_time}}</div>
+                                    <div class="small fw-regular"
+                                        [ngClass]="item.disabled ? 'text-muted' : 'text-success'">
+                                        {{item.remaining}} available</div>
+                                </div>
+                            </ng-template>
+                        </p-selectbutton>
+                    </div>
+                </p-panel>
 
-            <p-panel header="Day 3 - 16 March 2026 ({{ getSelectedCount('day3') }} of 2 selected)" [toggleable]="true">
-                <div formGroupName="activities">
-                    <p-selectbutton id="activities-day3" [options]="day3Slots" optionLabel="name" optionValue="value"
-                        multiple="true" styleClass="border rounded" class="d-flex gap-2 activities"
-                        formControlName="day3"
-                        [ngClass]="{'p-invalid': registerForm.get('activities')?.errors?.['noDaysSelected'] && (registerForm.get('activities')?.touched || registerForm.get('activities')?.dirty)}">
-                    </p-selectbutton>
-                </div>
-            </p-panel>
+                <p-panel header="Day 3 - 16 March 2026 ({{ getSelectedCount('day3') }} of 2 selected)"
+                    [toggleable]="true">
+                    <div formGroupName="activities">
+                        <p-selectbutton id="activities-day3" [options]="day3Slots" multiple="true"
+                            styleClass="border rounded" class="d-flex flex-row flex-wrap gap-2 activities"
+                            formControlName="day3"
+                            [ngClass]="{'p-invalid': registerForm.get('activities')?.errors?.['noDaysSelected'] && (registerForm.get('activities')?.touched || registerForm.get('activities')?.dirty)}">
+                            <ng-template #item let-item>
+                                <div class="d-flex flex-column justify-content-center align-items-center gap-2">
+                                    <div class="fw-semibold">{{item.slot_time}}</div>
+                                    <div class="small fw-regular"
+                                        [ngClass]="item.disabled ? 'text-muted' : 'text-success'">
+                                        {{item.remaining}} available</div>
+                                </div>
+                            </ng-template>
+                        </p-selectbutton>
+                    </div>
+                </p-panel>
+            </div>
+            } @else {
+            <p>Loading available slots. Please wait...</p>
+            }
 
             <div *ngIf="(registerForm.get('activities')?.touched || registerForm.get('activities')?.dirty) 
-            && registerForm.get('activities')?.errors?.['noDaysSelected']" class="text-danger">
-                Please select at least one day.
+            && registerForm.get('activities')?.errors?.['noDaysSelected']" class="text-danger mt-2 small">
+                Please sselect at least one 1-hour slot.
             </div>
 
 

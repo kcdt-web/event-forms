@@ -41,9 +41,13 @@ interface Country {
 }
 
 interface Option {
-  name: string;
-  value: string;
-  disabled?: boolean;
+  id: number,
+  day: number,
+  slot_time: string,
+  max_capacity: number,
+  registration_count: number,
+  remaining?: number
+  disabled?: boolean
 }
 
 @Component({
@@ -78,6 +82,7 @@ export class GayathriHavanam implements OnInit {
   day1Slots: Option[] = [];
   day2Slots: Option[] = [];
   day3Slots: Option[] = [];
+  slots: any[] = [];
 
   private readonly MAX_SLOTS_PER_DAY: any = {
     day1: 4,
@@ -104,6 +109,7 @@ export class GayathriHavanam implements OnInit {
 
     this.initializeForm(defaultCountry);
     this.handleFormChanges();
+
   }
 
   /** Prevent accidental page exit */
@@ -111,6 +117,30 @@ export class GayathriHavanam implements OnInit {
     if (!this.registerForm) return false;
     return this.registerForm.dirty && !this.registrationSuccess;
   }
+
+  async loadSlotsAvailability() {
+    const response = await fetch(environment.gayathriHavanamSlotsEdgeFunction);
+    const result = await response.json();
+
+    if (result.success) {
+      // Keep slots exactly as received from DB
+      this.slots = result.slots;
+
+      // Group by day
+      this.day1Slots = this.slots.filter(s => s.day === 1);
+      this.day2Slots = this.slots.filter(s => s.day === 2);
+      this.day3Slots = this.slots.filter(s => s.day === 3);
+
+      [...this.day1Slots, ...this.day2Slots, ...this.day3Slots].forEach(s => {
+        s.disabled = s.max_capacity === s.registration_count;
+        s.remaining = s.max_capacity - s.registration_count;
+      });
+
+      this.cd.detectChanges();
+    }
+  }
+
+
 
   @HostListener('window:beforeunload', ['$event'])
   handleBeforeUnload(event: BeforeUnloadEvent): string | undefined {
@@ -124,35 +154,7 @@ export class GayathriHavanam implements OnInit {
 
   /** Dropdown Options */
   private initializeOptions(): void {
-    // Day 1: 07:00 - 17:00 (10 slots)
-    this.day1Slots = this.generateHourlySlots(7, 17);
-
-    // Day 2: 07:00 - 17:00 (10 slots)
-    this.day2Slots = this.generateHourlySlots(7, 17);
-
-    // Day 3: 07:00 - 11:00 (4 slots)
-    this.day3Slots = this.generateHourlySlots(7, 11);
-  }
-
-  /** Generate 1-hour slots between start and end hours (24h format) */
-  private generateHourlySlots(startHour: number, endHour: number): Option[] {
-    const slots: Option[] = [];
-    for (let hour = startHour; hour < endHour; hour++) {
-      const start = this.formatHour(hour);
-      const end = this.formatHour(hour + 1);
-      slots.push({
-        name: `${start}`,
-        value: `${start}`
-      });
-    }
-    return slots;
-  }
-
-  /** Format hour in 12-hour format with AM/PM */
-  private formatHour(hour: number): string {
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const h = hour % 12 === 0 ? 12 : hour % 12;
-    return `${h.toString().padStart(2, '0')}:00 ${ampm}`;
+    this.loadSlotsAvailability();
   }
 
   private enforceSlotConstraints(): void {
@@ -161,47 +163,56 @@ export class GayathriHavanam implements OnInit {
     const days: DayKey[] = ['day1', 'day2', 'day3'];
 
     days.forEach((day) => {
-      const selected: string[] = activitiesGroup.get(day)?.value || [];
+      const selected: Option[] = activitiesGroup.get(day)?.value || [];
       const slots: Option[] =
         day === 'day1' ? this.day1Slots :
           day === 'day2' ? this.day2Slots :
             this.day3Slots;
 
-      const disabledSlots: string[] = [];
+      const slotTimes = slots.map(s => this.convertToHour(s.slot_time));
 
-      // 1️⃣ Disable all remaining if max slots per day reached
-      if (selected.length >= this.MAX_SLOTS_PER_DAY[day]) {
-        slots.forEach(s => {
-          if (!selected.includes(s.value)) disabledSlots.push(s.value);
-        });
-      }
-
-      // 2️⃣ Disable previous and next slot if 2 consecutive slots selected
-      const slotTimes = slots.map(s => this.convertToHour(s.value));
+      // Find indices of selected slots
       const selectedIndices = selected
-        .map(s => slotTimes.indexOf(this.convertToHour(s)))
+        .map(sel => {
+          const time = typeof sel === 'string' ? sel : sel.slot_time;
+          return slotTimes.indexOf(this.convertToHour(time));
+        })
+        .filter(i => i >= 0)
         .sort((a, b) => a - b);
 
-      for (let i = 0; i < selectedIndices.length - 1; i++) {
-        if (selectedIndices[i + 1] - selectedIndices[i] === 1) {
-          // Disable next slot if not selected
-          const nextIndex = selectedIndices[i + 1] + 1;
-          if (nextIndex < slots.length && !selected.includes(slots[nextIndex].value)) {
-            disabledSlots.push(slots[nextIndex].value);
-          }
+      slots.forEach((s, index) => {
+        // Rule 1: Disable if remaining >= max_allowed
+        const fullSlot = s.registration_count >= s.max_capacity;
 
-          // Disable previous slot if not selected
-          const prevIndex = selectedIndices[i] - 1;
-          if (prevIndex >= 0 && !selected.includes(slots[prevIndex].value)) {
-            disabledSlots.push(slots[prevIndex].value);
+        // Rule 2: Disable if max slots per day selected and this slot is not selected
+        const maxPerDayReached =
+          selected.length >= this.MAX_SLOTS_PER_DAY[day] &&
+          !selected.some(sel => (typeof sel === 'string' ? sel === s.slot_time : sel.slot_time === s.slot_time));
+
+        // Rule 3: Consecutive selection rule
+        let consecutiveDisabled = false;
+        for (let i = 0; i < selectedIndices.length - 1; i++) {
+          if (selectedIndices[i + 1] - selectedIndices[i] === 1) {
+            const nextIndex = selectedIndices[i + 1] + 1;
+            const prevIndex = selectedIndices[i] - 1;
+
+            if (index === nextIndex && !selected.some(sel => (typeof sel === 'string' ? sel === s.slot_time : sel.slot_time === s.slot_time))) {
+              consecutiveDisabled = true;
+            }
+            if (index === prevIndex && !selected.some(sel => (typeof sel === 'string' ? sel === s.slot_time : sel.slot_time === s.slot_time))) {
+              consecutiveDisabled = true;
+            }
           }
         }
-      }
 
-      // Apply disabled property
-      slots.forEach(s => s.disabled = disabledSlots.includes(s.value));
+        // Final disabled state: any rule true → disabled
+        s.disabled = fullSlot || maxPerDayReached || consecutiveDisabled;
+      });
     });
   }
+
+
+
 
   getSelectedCount(day: 'day1' | 'day2' | 'day3'): number {
     const activities = this.registerForm.get('activities')?.value;
@@ -211,11 +222,21 @@ export class GayathriHavanam implements OnInit {
 
 
   private convertToHour(slot: string): number {
-    const [start] = slot.split(' - ');
-    const [h, mPart] = start.split(':');
-    const hour = parseInt(h, 10);
-    return start.includes('PM') && hour !== 12 ? hour + 12 : hour === 12 && start.includes('AM') ? 0 : hour;
+    if (!slot) return -1;
+
+    const match = slot.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    if (!match) return -1;
+
+    let hour = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    const period = match[3].toUpperCase();
+
+    if (period === "PM" && hour !== 12) hour += 12;
+    if (period === "AM" && hour === 12) hour = 0;
+
+    return hour + minutes / 60; // optional, returns fractional hour
   }
+
 
   /** Build Country List */
   private prepareCountries(): void {
@@ -438,9 +459,9 @@ export class GayathriHavanam implements OnInit {
       country_code: mainCountry?.iso2,
       mobile_number:
         Number(parsePhoneNumberFromString(String(mainMobile.value), mainCountry.iso2 as CountryCode)?.nationalNumber || mainMobile.value),
-      day1: this.registerForm.value.activities.day1,
-      day2: this.registerForm.value.activities.day2,
-      day3: this.registerForm.value.activities.day3,
+      day1: this.registerForm.value.activities.day1.map((s: Option) => s.id),
+      day2: this.registerForm.value.activities.day2.map((s: Option) => s.id),
+      day3: this.registerForm.value.activities.day3.map((s: Option) => s.id),
     };
 
     /** Call Edge Function */
