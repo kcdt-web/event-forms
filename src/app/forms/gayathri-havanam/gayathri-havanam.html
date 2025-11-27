@@ -117,8 +117,7 @@
                     <div formGroupName="activities">
                         <p-selectbutton id="activities-day1" [options]="day1Slots" multiple="true"
                             styleClass="border rounded" class="d-flex flex-row flex-wrap gap-2 activities"
-                            formControlName="day1" optionLabel="slot_time" optionValue="slot_time"
-                            optionDisabled="disabled"
+                            formControlName="day1" optionLabel="slot_time" optionValue="id" optionDisabled="disabled"
                             [ngClass]="{'p-invalid': registerForm.get('activities')?.errors?.['noDaysSelected'] && (registerForm.get('activities')?.touched || registerForm.get('activities')?.dirty)}">
                             <ng-template #item let-item>
                                 <div class="d-flex flex-column justify-content-center align-items-center gap-2">
@@ -137,7 +136,7 @@
                     <div formGroupName="activities">
                         <p-selectbutton id="activities-day2" [options]="day2Slots" multiple="true"
                             styleClass="border rounded" class="d-flex flex-row flex-wrap gap-2 activities"
-                            formControlName="day2"
+                            formControlName="day2" optionLabel="slot_time" optionValue="id" optionDisabled="disabled"
                             [ngClass]="{'p-invalid': registerForm.get('activities')?.errors?.['noDaysSelected'] && (registerForm.get('activities')?.touched || registerForm.get('activities')?.dirty)}">
                             <ng-template #item let-item>
                                 <div class="d-flex flex-column justify-content-center align-items-center gap-2">
@@ -156,7 +155,7 @@
                     <div formGroupName="activities">
                         <p-selectbutton id="activities-day3" [options]="day3Slots" multiple="true"
                             styleClass="border rounded" class="d-flex flex-row flex-wrap gap-2 activities"
-                            formControlName="day3"
+                            formControlName="day3" optionLabel="slot_time" optionValue="id" optionDisabled="disabled"
                             [ngClass]="{'p-invalid': registerForm.get('activities')?.errors?.['noDaysSelected'] && (registerForm.get('activities')?.touched || registerForm.get('activities')?.dirty)}">
                             <ng-template #item let-item>
                                 <div class="d-flex flex-column justify-content-center align-items-center gap-2">

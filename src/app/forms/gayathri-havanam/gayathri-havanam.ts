@@ -163,56 +163,77 @@ export class GayathriHavanam implements OnInit {
     const days: DayKey[] = ['day1', 'day2', 'day3'];
 
     days.forEach((day) => {
-      const selected: Option[] = activitiesGroup.get(day)?.value || [];
+      const control = activitiesGroup.get(day)!;
+      const selectedIds: number[] = control.value || [];
+
       const slots: Option[] =
         day === 'day1' ? this.day1Slots :
           day === 'day2' ? this.day2Slots :
             this.day3Slots;
 
-      const slotTimes = slots.map(s => this.convertToHour(s.slot_time));
+      if (!slots || slots.length === 0) return;
 
-      // Find indices of selected slots
-      const selectedIndices = selected
-        .map(sel => {
-          const time = typeof sel === 'string' ? sel : sel.slot_time;
-          return slotTimes.indexOf(this.convertToHour(time));
-        })
+      // 1) reset disabled based on capacity first
+      slots.forEach(s => {
+        s.disabled = s.registration_count >= s.max_capacity;
+      });
+
+      // 2) build selected indexes (sorted)
+      const selectedIdx = selectedIds
+        .map(id => slots.findIndex(s => s.id === id))
         .filter(i => i >= 0)
         .sort((a, b) => a - b);
 
-      slots.forEach((s, index) => {
-        // Rule 1: Disable if remaining >= max_allowed
-        const fullSlot = s.registration_count >= s.max_capacity;
-
-        // Rule 2: Disable if max slots per day selected and this slot is not selected
-        const maxPerDayReached =
-          selected.length >= this.MAX_SLOTS_PER_DAY[day] &&
-          !selected.some(sel => (typeof sel === 'string' ? sel === s.slot_time : sel.slot_time === s.slot_time));
-
-        // Rule 3: Consecutive selection rule
-        let consecutiveDisabled = false;
-        for (let i = 0; i < selectedIndices.length - 1; i++) {
-          if (selectedIndices[i + 1] - selectedIndices[i] === 1) {
-            const nextIndex = selectedIndices[i + 1] + 1;
-            const prevIndex = selectedIndices[i] - 1;
-
-            if (index === nextIndex && !selected.some(sel => (typeof sel === 'string' ? sel === s.slot_time : sel.slot_time === s.slot_time))) {
-              consecutiveDisabled = true;
-            }
-            if (index === prevIndex && !selected.some(sel => (typeof sel === 'string' ? sel === s.slot_time : sel.slot_time === s.slot_time))) {
-              consecutiveDisabled = true;
-            }
-          }
+      const markDisabledIfNotSelected = (index: number) => {
+        if (index < 0 || index >= slots.length) return;
+        const id = slots[index].id;
+        if (!selectedIds.includes(id)) {
+          slots[index].disabled = true;
         }
+      };
 
-        // Final disabled state: any rule true → disabled
-        s.disabled = fullSlot || maxPerDayReached || consecutiveDisabled;
+      // 3) Disable middle slot when selecting 3 & 5 (index diff == 2)
+      for (let i = 0; i < selectedIdx.length - 1; i++) {
+        const a = selectedIdx[i];
+        const b = selectedIdx[i + 1];
+
+        if (b - a === 2) {
+          markDisabledIfNotSelected(a + 1);
+        }
+      }
+
+      // 4) Disable prev and next-around for consecutive pairs
+      for (let i = 0; i < selectedIdx.length - 1; i++) {
+        const current = selectedIdx[i];
+        const next = selectedIdx[i + 1];
+
+        if (next - current === 1) {
+          markDisabledIfNotSelected(current - 1); // previous
+          markDisabledIfNotSelected(next + 1);    // next after pair
+        }
+      }
+
+      // 5) Remove any selected slot that somehow became disabled
+      const cleanedSelection = selectedIds.filter((id) => {
+        const idx = slots.findIndex(s => s.id === id);
+        return idx >= 0 && !slots[idx].disabled;
       });
+
+      if (cleanedSelection.length !== selectedIds.length) {
+        control.setValue(cleanedSelection, { emitEvent: false });
+      }
+
+      // 6) NEW RULE — If 4 slots selected, disable ALL non-selected slots
+      const updatedSelected = control.value || [];
+      if (updatedSelected.length >= 4) {
+        slots.forEach(slot => {
+          if (!updatedSelected.includes(slot.id)) {
+            slot.disabled = true;
+          }
+        });
+      }
     });
   }
-
-
-
 
   getSelectedCount(day: 'day1' | 'day2' | 'day3'): number {
     const activities = this.registerForm.get('activities')?.value;
@@ -381,27 +402,27 @@ export class GayathriHavanam implements OnInit {
     this.cd.detectChanges();
 
     try {
-      // 1) Run reCAPTCHA v3
-      const token = await firstValueFrom(this.recaptchaV3Service.execute('submit'));
-      if (!token) throw new Error('reCAPTCHA failed');
+      // // 1) Run reCAPTCHA v3
+      // const token = await firstValueFrom(this.recaptchaV3Service.execute('submit'));
+      // if (!token) throw new Error('reCAPTCHA failed');
 
-      // 2) Verify token on server (Edge Function)
-      const verifyResp = await fetch(
-        'https://blopfvarveykkggbpkfr.supabase.co/functions/v1/recaptcha-verify',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token }),
-        }
-      );
+      // // 2) Verify token on server (Edge Function)
+      // const verifyResp = await fetch(
+      //   'https://blopfvarveykkggbpkfr.supabase.co/functions/v1/recaptcha-verify',
+      //   {
+      //     method: 'POST',
+      //     headers: { 'Content-Type': 'application/json' },
+      //     body: JSON.stringify({ token }),
+      //   }
+      // );
 
-      const verifyData = await verifyResp.json();
-      if (!verifyResp.ok || !verifyData.success) {
-        this.submissionError = '[EC-TVF] Verification failed';
-        this.loading = false;
-        this.cd.detectChanges();
-        return;
-      }
+      // const verifyData = await verifyResp.json();
+      // if (!verifyResp.ok || !verifyData.success) {
+      //   this.submissionError = '[EC-TVF] Verification failed';
+      //   this.loading = false;
+      //   this.cd.detectChanges();
+      //   return;
+      // }
 
       // 3) Process form submission via Edge Function
       await this.processFormSubmission();
@@ -459,11 +480,12 @@ export class GayathriHavanam implements OnInit {
       country_code: mainCountry?.iso2,
       mobile_number:
         Number(parsePhoneNumberFromString(String(mainMobile.value), mainCountry.iso2 as CountryCode)?.nationalNumber || mainMobile.value),
-      day1: this.registerForm.value.activities.day1.map((s: Option) => s.id),
-      day2: this.registerForm.value.activities.day2.map((s: Option) => s.id),
-      day3: this.registerForm.value.activities.day3.map((s: Option) => s.id),
+      day1: this.registerForm.value.activities.day1,
+      day2: this.registerForm.value.activities.day2,
+      day3: this.registerForm.value.activities.day3,
     };
 
+    console.log(this.registerForm.value.activities.day1)
     /** Call Edge Function */
     try {
       console.log(mainData)
