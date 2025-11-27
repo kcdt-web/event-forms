@@ -1,8 +1,8 @@
+@if (!registrationClosed) {
 <!-- Alert for errors -->
 <div *ngIf="submissionError" class="alert alert-danger">
     {{ submissionError }}
 </div>
-
 <!-- Success message -->
 @if (registrationSuccess) {
 <div class="alert p-4">
@@ -10,7 +10,7 @@
     <p>All future updates and important information regarding the event will be sent to the mobile number you provided
         at the time of registration.</p>
     <p>We look forward to your participation.</p>
-    <!-- <a class="btn btn-primary" href="/varanasi-event/">Back to event details</a> -->
+    <a class="btn btn-primary" href="/home">Back to home</a>
 </div>
 } @else {
 <h1>Gayathri Havanam!</h1>
@@ -132,17 +132,17 @@
                                     <div class="fw-semibold">{{item.slot_time}}</div>
                                     @if (!item.disabled){
                                     <div class="small fw-regular" [ngClass]="
-                                        item.disabled ? 'text-muted' :
-                                        item.remaining < 2 ? 'text-danger' :
-                                        item.remaining < 4 ? 'text-warning' :
-                                        'text-success'
-                                        ">
+                                            item.disabled ? 'text-muted' :
+                                            item.remaining < 2 ? 'text-danger' :
+                                            item.remaining < 4 ? 'text-warning' :
+                                            'text-success'
+                                            ">
                                         {{item.remaining}} available</div>
                                     } @else {
                                     @if (item.remaining !== 0) {
                                     <div class="small fw-regular text-muted">{{item.remaining}} available</div>
                                     } @else {
-                                    <div class="small fw-regular text-muted">Closed</div>}
+                                    <div class="small fw-regular text-muted">Filled</div>}
                                     }
                                 </div>
                             </ng-template>
@@ -178,17 +178,17 @@
                                     <div class="fw-semibold">{{item.slot_time}}</div>
                                     @if (!item.disabled){
                                     <div class="small fw-regular" [ngClass]="
-                                        item.disabled ? 'text-muted' :
-                                        item.remaining < 2 ? 'text-danger' :
-                                        item.remaining < 4 ? 'text-warning' :
-                                        'text-success'
-                                        ">
+                                            item.disabled ? 'text-muted' :
+                                            item.remaining < 2 ? 'text-danger' :
+                                            item.remaining < 4 ? 'text-warning' :
+                                            'text-success'
+                                            ">
                                         {{item.remaining}} available</div>
                                     } @else {
                                     @if (item.remaining !== 0) {
                                     <div class="small fw-regular text-muted">{{item.remaining}} available</div>
                                     } @else {
-                                    <div class="small fw-regular text-muted">Closed</div>}
+                                    <div class="small fw-regular text-muted">Filled</div>}
                                     }
                                 </div>
                             </ng-template>
@@ -223,17 +223,17 @@
                                     <div class="fw-semibold">{{item.slot_time}}</div>
                                     @if (!item.disabled){
                                     <div class="small fw-regular" [ngClass]="
-                                        item.disabled ? 'text-muted' :
-                                        item.remaining < 2 ? 'text-danger' :
-                                        item.remaining < 4 ? 'text-warning' :
-                                        'text-success'
-                                        ">
+                                            item.disabled ? 'text-muted' :
+                                            item.remaining < 2 ? 'text-danger' :
+                                            item.remaining < 4 ? 'text-warning' :
+                                            'text-success'
+                                            ">
                                         {{item.remaining}} available</div>
                                     } @else {
                                     @if (item.remaining !== 0) {
                                     <div class="small fw-regular text-muted">{{item.remaining}} available</div>
                                     } @else {
-                                    <div class="small fw-regular text-muted">Closed</div>}
+                                    <div class="small fw-regular text-muted">Filled</div>}
                                     }
                                 </div>
                             </ng-template>
@@ -255,7 +255,7 @@
             }
 
             <div *ngIf="(registerForm.get('activities')?.touched || registerForm.get('activities')?.dirty) 
-            && registerForm.get('activities')?.errors?.['noDaysSelected']" class="text-danger mt-2 small">
+                && registerForm.get('activities')?.errors?.['noDaysSelected']" class="text-danger mt-2 small">
                 Please select at least one 1-hour slot.
             </div>
 
@@ -266,4 +266,12 @@
     <!-- Submit Button -->
     <p-button styleClass="kcdt-primary-button" type="submit" label="Register" [loading]="loading"></p-button>
 </form>
+}
+} @else {
+<div class="alert p-4">
+    <h1>Registrations Closed</h1>
+    <p>All available slots for the Gayathri Havanam have now been filled.
+        We appreciate your interest and thank you for your understanding.</p>
+    <a class="btn btn-primary" href="/home">Back to home</a>
+</div>
 }

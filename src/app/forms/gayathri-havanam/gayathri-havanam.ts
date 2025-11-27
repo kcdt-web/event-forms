@@ -83,6 +83,7 @@ export class GayathriHavanam implements OnInit {
   day2Slots: Option[] = [];
   day3Slots: Option[] = [];
   slots: any[] = [];
+  registrationClosed = false;
 
   private readonly MAX_SLOTS_PER_DAY: any = {
     day1: 4,
@@ -134,6 +135,12 @@ export class GayathriHavanam implements OnInit {
       [...this.day1Slots, ...this.day2Slots, ...this.day3Slots].forEach(s => {
         s.disabled = s.max_capacity === s.registration_count;
       });
+
+      const anyAvailable = this.slots.some(
+        s => s.registration_count < s.max_capacity
+      );
+
+      this.registrationClosed = !anyAvailable;
 
       this.cd.detectChanges();
     }
