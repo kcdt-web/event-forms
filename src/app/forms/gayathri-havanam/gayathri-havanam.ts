@@ -32,6 +32,7 @@ import {
 import examples from 'libphonenumber-js/mobile/examples';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment.prod';
+import { ɵEmptyOutletComponent } from "@angular/router";
 
 interface Country {
   name: string;
@@ -61,7 +62,7 @@ interface Option {
     SelectModule,
     SelectButtonModule,
     PanelModule,
-    ButtonModule,],
+    ButtonModule, ɵEmptyOutletComponent],
   templateUrl: './gayathri-havanam.html',
   styleUrl: './gayathri-havanam.scss',
 })
@@ -133,14 +134,11 @@ export class GayathriHavanam implements OnInit {
 
       [...this.day1Slots, ...this.day2Slots, ...this.day3Slots].forEach(s => {
         s.disabled = s.max_capacity === s.registration_count;
-        s.remaining = s.max_capacity - s.registration_count;
       });
 
       this.cd.detectChanges();
     }
   }
-
-
 
   @HostListener('window:beforeunload', ['$event'])
   handleBeforeUnload(event: BeforeUnloadEvent): string | undefined {
@@ -367,6 +365,48 @@ export class GayathriHavanam implements OnInit {
 
   }
 
+  hasConsecutiveOrDisabledInBetween(day: 'day1' | 'day2' | 'day3'): boolean {
+    const selectedIds: number[] = this.registerForm.get('activities')?.get(day)?.value || [];
+    if (selectedIds.length === 0) return false;
+
+    const slots: Option[] = day === 'day1' ? this.day1Slots
+      : day === 'day2' ? this.day2Slots
+        : this.day3Slots;
+
+    const selectedIndexes = selectedIds
+      .map(id => slots.findIndex(s => s.id === id))
+      .filter(i => i >= 0)
+      .sort((a, b) => a - b);
+
+    // 1) Check for consecutive selection
+    for (let i = 0; i < selectedIndexes.length - 1; i++) {
+      if (selectedIndexes[i + 1] - selectedIndexes[i] === 1) return true;
+    }
+
+    // 2) Check for any disabled slot that is between selected slots
+    for (let i = 0; i < selectedIndexes.length - 1; i++) {
+      const start = selectedIndexes[i];
+      const end = selectedIndexes[i + 1];
+      if (end - start > 1) {
+        // Check slots in between
+        for (let j = start + 1; j < end; j++) {
+          if (slots[j].disabled && !this.isDisabledByCapacity(slots[j])) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /** Optional: distinguish capacity-based disabled slots from selection-based */
+  private isDisabledByCapacity(slot: Option): boolean {
+    return slot.registration_count >= slot.max_capacity;
+  }
+
+
+
   /** Dynamic phone length from example number */
   private updatePhoneLength(countryIso2?: string): void {
     if (!countryIso2) return;
@@ -430,7 +470,6 @@ export class GayathriHavanam implements OnInit {
       this.submissionError = '[EC-GE] ' + (err?.message || 'Unknown error');
     } finally {
       this.loading = false;
-      this.scrollToTop();
       this.cd.detectChanges();
     }
   }
@@ -485,10 +524,8 @@ export class GayathriHavanam implements OnInit {
       day3: this.registerForm.value.activities.day3,
     };
 
-    console.log(this.registerForm.value.activities.day1)
     /** Call Edge Function */
     try {
-      console.log(mainData)
       const resp = await fetch(environment.gayathriHavanamRegistrationEdgeFunction, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

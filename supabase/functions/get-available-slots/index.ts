@@ -3,16 +3,12 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-// const ORIGINS = ["https://kcdastrust.org"];
 const ORIGINS = ["http://127.0.0.1:4200"];
 
 serve(async (req) => {
   try {
     const origin = req.headers.get("Origin") || "";
-
-    if (!ORIGINS.includes(origin)) {
-      return new Response("Forbidden", { status: 403 });
-    }
+    if (!ORIGINS.includes(origin)) return new Response("Forbidden", { status: 403 });
 
     if (req.method === "OPTIONS") {
       return new Response("ok", {
@@ -24,9 +20,16 @@ serve(async (req) => {
       });
     }
 
+    if (req.method !== "GET") {
+      return new Response(JSON.stringify({ success: false, error: "GET required" }), {
+        status: 400,
+        headers: { "Access-Control-Allow-Origin": origin },
+      });
+    }
+
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // GET ALL SLOTS
+    // Fetch all slots
     const { data, error } = await supabase
       .from("slots")
       .select("*")
@@ -34,8 +37,15 @@ serve(async (req) => {
 
     if (error) throw error;
 
+    // Calculate remaining spots and disable full slots
+    const slotsWithAvailability = data.map(slot => ({
+      ...slot,
+      remaining: slot.max_capacity - slot.registration_count,
+      disabled: slot.registration_count >= slot.max_capacity,
+    }));
+
     return new Response(
-      JSON.stringify({ success: true, slots: data }),
+      JSON.stringify({ success: true, slots: slotsWithAvailability }),
       {
         status: 200,
         headers: {
@@ -44,9 +54,10 @@ serve(async (req) => {
         },
       }
     );
-  } catch (err) {
+
+  } catch (err: any) {
     return new Response(
-      JSON.stringify({ success: false, error: err.message }),
+      JSON.stringify({ success: false, error: err?.message || "Unknown error" }),
       {
         status: 400,
         headers: {
