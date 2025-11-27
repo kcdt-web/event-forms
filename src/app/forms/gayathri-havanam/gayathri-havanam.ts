@@ -143,6 +143,7 @@ export class GayathriHavanam implements OnInit {
       this.noSlotsAvailable = !anyAvailable;
 
       this.updateActivityValidators();
+      this.enforceSlotConstraints();
 
       this.cd.detectChanges();
     }
@@ -219,17 +220,7 @@ export class GayathriHavanam implements OnInit {
         }
       }
 
-      // 5) Remove any selected slot that somehow became disabled
-      const cleanedSelection = selectedIds.filter((id) => {
-        const idx = slots.findIndex(s => s.id === id);
-        return idx >= 0 && !slots[idx].disabled;
-      });
-
-      if (cleanedSelection.length !== selectedIds.length) {
-        control.setValue(cleanedSelection, { emitEvent: false });
-      }
-
-      // 6) NEW RULE — If 4 slots selected, disable ALL non-selected slots
+      // 5) If 4 slots selected, disable ALL non-selected slots
       const updatedSelected = control.value || [];
       if (updatedSelected.length >= 4) {
         slots.forEach(slot => {
@@ -237,6 +228,16 @@ export class GayathriHavanam implements OnInit {
             slot.disabled = true;
           }
         });
+      }
+
+      // 6) Remove any selected slot that somehow became disabled
+      const cleanedSelection = selectedIds.filter((id) => {
+        const idx = slots.findIndex(s => s.id === id);
+        return idx >= 0 && !slots[idx].disabled;
+      });
+
+      if (cleanedSelection.length !== selectedIds.length) {
+        control.setValue(cleanedSelection, { emitEvent: false });
       }
     });
   }
@@ -525,7 +526,6 @@ export class GayathriHavanam implements OnInit {
       };
       /** Call Edge Function */
       try {
-        console.log("here")
         const resp = await fetch(environment.gayathriHavanamWaitlists, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -540,6 +540,7 @@ export class GayathriHavanam implements OnInit {
         this.registrationSuccess = true;
         this.scrollToTop();
       } catch (err: any) {
+        this.scrollToTop();
         this.submissionError = 'Error joining waitlist. ' + (err?.message || 'Unknown error');
       }
     } else {
@@ -562,12 +563,25 @@ export class GayathriHavanam implements OnInit {
           body: JSON.stringify({ mainData }),
         });
         const data = await resp.json();
-        if (!resp.ok || !data.success) throw new Error(data.error || 'Registration failed');
+        if (!resp.ok || !data.success) {
+          const errorMsg = data.message || data.error || 'Registration failed';
+          throw new Error(errorMsg);
+        }
 
         this.registrationSuccess = true;
         this.scrollToTop();
       } catch (err: any) {
-        this.submissionError = 'Error saving registration: ' + (err?.message || 'Unknown error');
+        if (err?.message === "Selected slot(s) are no longer unavailable.") {
+          this.submissionError = "Selected slot(s) are no longer unavailable.";
+          const activitiesGroup = this.registerForm.get('activities') as FormGroup;
+          ['day1', 'day2', 'day3'].forEach(day => {
+            activitiesGroup.get(day)?.reset([]);
+          });
+        } else {
+          this.submissionError = 'Error saving registration: ' + (err?.message || 'Unknown error');
+        }
+        this.scrollToTop();
+        this.loadSlotsAvailability();
       }
     }
   }

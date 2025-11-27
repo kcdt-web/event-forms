@@ -3,8 +3,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-// const ORIGINS = ["https://kcdastrust.org"];
-const ORIGINS = ["http://127.0.0.1:4200"];
+const ORIGINS = ["https://kcdastrust.org"];
 
 // Rate limiting
 const RATE_LIMIT_WINDOW = 60 * 1000; // 60 seconds
@@ -54,22 +53,42 @@ serve(async (req) => {
         if (rateData.count >= MAX_REQUESTS_PER_WINDOW) {
           return new Response(
             JSON.stringify({ success: false, message: "Rate limit exceeded" }),
-            { status: 429, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": origin } }
+            {
+              status: 429,
+              headers: {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": origin,
+              },
+            }
           );
         }
-        await supabase.from("request_rate_limit").update({ count: rateData.count + 1 }).eq("ip", ip);
+        await supabase
+          .from("request_rate_limit")
+          .update({ count: rateData.count + 1 })
+          .eq("ip", ip);
       } else {
-        await supabase.from("request_rate_limit").update({ count: 1, last_request: now }).eq("ip", ip);
+        await supabase
+          .from("request_rate_limit")
+          .update({ count: 1, last_request: now })
+          .eq("ip", ip);
       }
     } else {
-      await supabase.from("request_rate_limit").insert({ ip, last_request: now, count: 1 });
+      await supabase
+        .from("request_rate_limit")
+        .insert({ ip, last_request: now, count: 1 });
     }
     // ===== END RATE LIMITING =====
 
     // Parse request body
     const body = await req.json().catch(() => null);
     if (!body || !body.mainData) {
-      return new Response(JSON.stringify({ success: false, error: "Missing mainData" }), { status: 400, headers: { "Access-Control-Allow-Origin": origin } });
+      return new Response(
+        JSON.stringify({ success: false, error: "Missing mainData" }),
+        {
+          status: 400,
+          headers: { "Access-Control-Allow-Origin": origin },
+        }
+      );
     }
 
     const { mainData } = body;
@@ -90,58 +109,123 @@ serve(async (req) => {
     let oldSlots: number[] = [];
 
     if (existing && existing.length > 0) {
+      // ===== EXISTING USER UPDATE =====
       const old = existing[0];
-      oldSlots = [...(old.day1 || []), ...(old.day2 || []), ...(old.day3 || [])];
+      oldSlots = [
+        ...(old.day1 || []),
+        ...(old.day2 || []),
+        ...(old.day3 || []),
+      ];
 
-      // Determine slots to add/remove
-      const slotsToAdd = newSlots.filter(id => !oldSlots.includes(id));
-      const slotsToRemove = oldSlots.filter(id => !newSlots.includes(id));
+      const slotsToAdd = newSlots.filter((id) => !oldSlots.includes(id));
+      const slotsToRemove = oldSlots.filter((id) => !newSlots.includes(id));
 
-      // 2️⃣ Check capacity only for slots to add
+      // 2️⃣ Check capacity only for slots being added
       for (const slotId of slotsToAdd) {
         const { data: slot, error: slotErr } = await supabase
           .from("slots")
           .select("registration_count, max_capacity")
           .eq("id", slotId)
           .single();
+
         if (slotErr) throw slotErr;
+
         if (slot.registration_count >= slot.max_capacity) {
-          return new Response(JSON.stringify({ success: false, message: `Slot ${slotId} is full`, full: true }), { status: 400, headers: { "Access-Control-Allow-Origin": origin } });
+          return new Response(
+            JSON.stringify({
+              success: false,
+              message: "Selected slots are no longer available",
+              fullSlots: [slotId],
+            }),
+            {
+              status: 400,
+              headers: {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": origin,
+              },
+            }
+          );
         }
       }
 
-      // 3️⃣ Update registration
       const { mobile_number, ...updateData } = mainData;
-      const { error: updErr } = await supabase.from("registrations").update(updateData).eq("id", old.id);
+      const { error: updErr } = await supabase
+        .from("registrations")
+        .update(updateData)
+        .eq("id", old.id);
       if (updErr) throw updErr;
+
       mainId = old.id;
 
-      // 4️⃣ Update slot counts atomically
-      for (const slotId of slotsToRemove) await supabase.rpc("decrement_slot", { slot_id: slotId });
-      for (const slotId of slotsToAdd) await supabase.rpc("increment_slot", { slot_id: slotId });
+      // Update slot counts
+      for (const slotId of slotsToRemove)
+        await supabase.rpc("decrement_slot", { slot_id: slotId });
+      for (const slotId of slotsToAdd)
+        await supabase.rpc("increment_slot", { slot_id: slotId });
 
     } else {
-      // New registration
+      // ===== NEW REGISTRATION =====
+      // 2️⃣ Check ALL selected slots BEFORE insert
+      for (const slotId of newSlots) {
+        const { data: slot, error: slotErr } = await supabase
+          .from("slots")
+          .select("registration_count, max_capacity")
+          .eq("id", slotId)
+          .single();
+
+        if (slotErr) throw slotErr;
+
+        if (slot.registration_count >= slot.max_capacity) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              message: "Selected slot(s) are unavailable.",
+              fullSlots: [slotId],
+            }),
+            {
+              status: 400,
+              headers: {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": origin,
+              },
+            }
+          );
+        }
+      }
+
+      // Insert registration now that slots are verified
       const { data: inserted, error: insertErr } = await supabase
         .from("registrations")
         .insert([mainData])
         .select()
         .single();
+
       if (insertErr) throw insertErr;
       mainId = inserted.id;
 
-      for (const slotId of newSlots) await supabase.rpc("increment_slot", { slot_id: slotId });
+      // Increment slot counts
+      for (const slotId of newSlots)
+        await supabase.rpc("increment_slot", { slot_id: slotId });
     }
 
     return new Response(JSON.stringify({ success: true, mainId }), {
       status: 200,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": origin },
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": origin,
+      },
     });
 
   } catch (err: any) {
-    return new Response(JSON.stringify({ success: false, error: err?.message || "Unknown error" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": ORIGINS[0] },
-    });
+    return new Response(
+      JSON.stringify({ success: false, error: err?.message || "Unknown error" }),
+      {
+        status: 400,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": ORIGINS[0],
+        },
+      }
+    );
   }
 });
