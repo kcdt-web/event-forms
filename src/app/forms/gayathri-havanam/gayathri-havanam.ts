@@ -83,7 +83,7 @@ export class GayathriHavanam implements OnInit {
   day2Slots: Option[] = [];
   day3Slots: Option[] = [];
   slots: any[] = [];
-  registrationClosed = false;
+  noSlotsAvailable = false;
 
   private readonly MAX_SLOTS_PER_DAY: any = {
     day1: 4,
@@ -140,7 +140,9 @@ export class GayathriHavanam implements OnInit {
         s => s.registration_count < s.max_capacity
       );
 
-      this.registrationClosed = !anyAvailable;
+      this.noSlotsAvailable = !anyAvailable;
+
+      this.updateActivityValidators();
 
       this.cd.detectChanges();
     }
@@ -246,23 +248,6 @@ export class GayathriHavanam implements OnInit {
   }
 
 
-  private convertToHour(slot: string): number {
-    if (!slot) return -1;
-
-    const match = slot.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-    if (!match) return -1;
-
-    let hour = parseInt(match[1], 10);
-    const minutes = parseInt(match[2], 10);
-    const period = match[3].toUpperCase();
-
-    if (period === "PM" && hour !== 12) hour += 12;
-    if (period === "AM" && hour === 12) hour = 0;
-
-    return hour + minutes / 60; // optional, returns fractional hour
-  }
-
-
   /** Build Country List */
   private prepareCountries(): void {
     this.countriesList = Object.entries(countries).map(([iso2, data]) => ({
@@ -300,6 +285,20 @@ export class GayathriHavanam implements OnInit {
       defaultCountry?.iso2,
       true
     );
+  }
+
+  private updateActivityValidators(): void {
+    const activities = this.registerForm.get('activities') as FormGroup;
+
+    if (!activities) return;
+
+    if (this.noSlotsAvailable) {
+      activities.clearValidators();
+    } else {
+      activities.setValidators([this.atLeastOneDaySelected()]);
+    }
+
+    activities.updateValueAndValidity({ emitEvent: false });
   }
 
   /** Activities min selected */
@@ -406,12 +405,9 @@ export class GayathriHavanam implements OnInit {
     return false;
   }
 
-  /** Optional: distinguish capacity-based disabled slots from selection-based */
   private isDisabledByCapacity(slot: Option): boolean {
     return slot.registration_count >= slot.max_capacity;
   }
-
-
 
   /** Dynamic phone length from example number */
   private updatePhoneLength(countryIso2?: string): void {
@@ -518,32 +514,61 @@ export class GayathriHavanam implements OnInit {
       return;
     }
 
-    /** Prepare payload */
-    const mainData = {
-      kcdt_member_id: this.registerForm.value.kcdt_member_id,
-      full_name: this.registerForm.value.full_name,
-      country_code: mainCountry?.iso2,
-      mobile_number:
-        Number(parsePhoneNumberFromString(String(mainMobile.value), mainCountry.iso2 as CountryCode)?.nationalNumber || mainMobile.value),
-      day1: this.registerForm.value.activities.day1,
-      day2: this.registerForm.value.activities.day2,
-      day3: this.registerForm.value.activities.day3,
-    };
+    if (this.noSlotsAvailable) {
+      /** Prepare payload */
+      const mainData = {
+        kcdt_member_id: this.registerForm.value.kcdt_member_id,
+        full_name: this.registerForm.value.full_name,
+        country_code: mainCountry?.iso2,
+        mobile_number:
+          parsePhoneNumberFromString(String(mainMobile.value), mainCountry.iso2 as CountryCode)?.nationalNumber || mainMobile.value,
+      };
+      /** Call Edge Function */
+      try {
+        console.log("here")
+        const resp = await fetch(environment.gayathriHavanamWaitlists, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mainData }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.success) {
+          const errorMsg = data.message || data.error || 'Registration failed';
+          throw new Error(errorMsg);
+        }
 
-    /** Call Edge Function */
-    try {
-      const resp = await fetch(environment.gayathriHavanamRegistrationEdgeFunction, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mainData }),
-      });
-      const data = await resp.json();
-      if (!resp.ok || !data.success) throw new Error(data.error || 'Registration failed');
+        this.registrationSuccess = true;
+        this.scrollToTop();
+      } catch (err: any) {
+        this.submissionError = 'Error joining waitlist. ' + (err?.message || 'Unknown error');
+      }
+    } else {
+      /** Prepare payload */
+      const mainData = {
+        kcdt_member_id: this.registerForm.value.kcdt_member_id,
+        full_name: this.registerForm.value.full_name,
+        country_code: mainCountry?.iso2,
+        mobile_number:
+          Number(parsePhoneNumberFromString(String(mainMobile.value), mainCountry.iso2 as CountryCode)?.nationalNumber || mainMobile.value),
+        day1: this.registerForm.value.activities.day1,
+        day2: this.registerForm.value.activities.day2,
+        day3: this.registerForm.value.activities.day3,
+      };
+      /** Call Edge Function */
+      try {
+        const resp = await fetch(environment.gayathriHavanamRegistrationEdgeFunction, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mainData }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.success) throw new Error(data.error || 'Registration failed');
 
-      this.registrationSuccess = true;
-      this.scrollToTop();
-    } catch (err: any) {
-      this.submissionError = 'Error saving registration: ' + (err?.message || 'Unknown error');
+        this.registrationSuccess = true;
+        this.scrollToTop();
+      } catch (err: any) {
+        this.submissionError = 'Error saving registration: ' + (err?.message || 'Unknown error');
+      }
     }
   }
 }

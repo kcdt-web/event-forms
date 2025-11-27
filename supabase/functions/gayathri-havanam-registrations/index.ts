@@ -3,7 +3,8 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ORIGINS = ["https://kcdastrust.org"];
+// const ORIGINS = ["https://kcdastrust.org"];
+const ORIGINS = ["http://127.0.0.1:4200"];
 
 // Rate limiting
 const RATE_LIMIT_WINDOW = 60 * 1000; // 60 seconds

@@ -1,10 +1,17 @@
-@if (!registrationClosed) {
 <!-- Alert for errors -->
 <div *ngIf="submissionError" class="alert alert-danger">
     {{ submissionError }}
 </div>
 <!-- Success message -->
 @if (registrationSuccess) {
+@if (noSlotsAvailable) {
+<div class="alert p-4">
+    <h1>You're Now on the Waitlist!</h1>
+    <p>You've been successfully added to our waitlist. All current slots are filled, but we'll contact you at the mobile
+        number you provided as soon as a spot becomes available.</p>
+    <a class="btn btn-primary" href="/home">Back to home</a>
+</div>
+} @else {
 <div class="alert p-4">
     <h1>Registration Submitted Successfully!</h1>
     <p>All future updates and important information regarding the event will be sent to the mobile number you provided
@@ -12,6 +19,7 @@
     <p>We look forward to your participation.</p>
     <a class="btn btn-primary" href="/home">Back to home</a>
 </div>
+}
 } @else {
 <h1>Gayathri Havanam!</h1>
 <p class="mb-4"><span class="text-danger fw-bold">Note:</span> Performing Gayatri Japam daily after Sandhyavandanam,
@@ -104,6 +112,7 @@
         <legend class="h5 m-0 mb-2">Which day(s) will you be attending the Gayatri Havanam? <span
                 class="text-danger">*</span>
         </legend>
+        @if (!noSlotsAvailable) {
         <div>
             <div class="d-flex text-muted small gap-2 align-items-center mb-4">
                 <i class="pi pi-info-circle"></i>
@@ -261,17 +270,17 @@
 
 
         </div>
+        } @else {
+        <div class="pt-3">
+            <div class="alert alert-info m-0">All slots are filled and none are available right now. <span
+                    class="fw-semibold">Join our
+                    waitlist</span>, and we’ll contact you as soon as one opens.</div>
+        </div>
+        }
     </fieldset>
 
     <!-- Submit Button -->
-    <p-button styleClass="kcdt-primary-button" type="submit" label="Register" [loading]="loading"></p-button>
+    <p-button styleClass="kcdt-primary-button" type="submit" [label]="noSlotsAvailable ? 'Join waitlist' : 'Register'"
+        [loading]="loading"></p-button>
 </form>
-}
-} @else {
-<div class="alert p-4">
-    <h1>Registrations Closed</h1>
-    <p>All available slots for the Gayathri Havanam have now been filled.
-        We appreciate your interest and thank you for your understanding.</p>
-    <a class="btn btn-primary" href="/home">Back to home</a>
-</div>
 }

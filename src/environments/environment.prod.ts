@@ -7,5 +7,6 @@ export const environment = {
     varanasiPrimaryTable: "varanasi_events_primary_participants",
     varanasiAccompanyingTable: "varanasi_event_accompanying_participants",
     gayathriHavanamRegistrationEdgeFunction: "https://pxjvvcdfaaakyuglmvig.supabase.co/functions/v1/gayathri-havanam-registrations",
-    gayathriHavanamSlotsEdgeFunction: "https://pxjvvcdfaaakyuglmvig.supabase.co/functions/v1/get-available-slots"
+    gayathriHavanamSlotsEdgeFunction: "https://pxjvvcdfaaakyuglmvig.supabase.co/functions/v1/get-available-slots",
+    gayathriHavanamWaitlists: "https://pxjvvcdfaaakyuglmvig.supabase.co/functions/v1/waitlists"
 };
