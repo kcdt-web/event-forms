@@ -5,6 +5,8 @@ import {
   ElementRef,
   HostListener,
 } from '@angular/core';
+import { RouterOutlet, Router, ActivatedRoute, NavigationEnd } from '@angular/router';
+import { filter } from 'rxjs/operators';
 import {
   FormBuilder,
   FormGroup,
@@ -30,7 +32,7 @@ import {
   getExampleNumber,
 } from 'libphonenumber-js';
 import examples from 'libphonenumber-js/mobile/examples';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, Subscription } from 'rxjs';
 import { environment } from '../../../environments/environment.prod';
 
 interface Country {
@@ -50,6 +52,7 @@ interface Option {
   templateUrl: './varanasi-events.html',
   styleUrls: ['./varanasi-events.scss'],
   imports: [
+    RouterOutlet,
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
@@ -75,15 +78,27 @@ export class VaranasiEvents implements OnInit {
   submissionError = '';
   submitted = false;
   isMobile = false;
+  hideParent = false;
+  private sub!: Subscription;
 
   constructor(
     private fb: FormBuilder,
     private cd: ChangeDetectorRef,
     private el: ElementRef,
-    private recaptchaV3Service: ReCaptchaV3Service
+    private recaptchaV3Service: ReCaptchaV3Service,
+    private router: Router, private route: ActivatedRoute
   ) { }
 
   ngOnInit(): void {
+    // set initial value as well
+    this.hideParent = this.router.url.includes('/search');
+    this.sub = this.router.events.pipe(
+      filter(e => e instanceof NavigationEnd)
+    ).subscribe((e: NavigationEnd) => {
+      const url = e.urlAfterRedirects ?? e.url;
+      this.hideParent = url.includes('/search');
+    });
+
     this.isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
     this.initializeOptions();

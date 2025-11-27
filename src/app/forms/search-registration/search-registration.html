@@ -1,0 +1,68 @@
+<h1>Search registration</h1>
+<p></p>
+
+<!-- Registration form -->
+<form [formGroup]="registerForm" (ngSubmit)="onSubmit()">
+    <!-- Main Participant -->
+    <fieldset class="border rounded p-4 mb-4">
+        <legend class="h5 m-0 mb-4">Tell us about you</legend>
+
+        <!-- KCDT Member ID -->
+        <div class="mb-4">
+            <p-floatlabel variant="on">
+                <p-inputnumber mode="decimal" inputId="member_id" [useGrouping]="false" inputStyleClass="form-control"
+                    fluid="true" formControlName="kcdt_member_id"></p-inputnumber>
+                <label for="member_id" class="form-label d-block">KCDT Member ID <span
+                        class="text-danger">*</span></label>
+            </p-floatlabel>
+            <div *ngIf="registerForm.get('kcdt_member_id')?.touched && registerForm.get('kcdt_member_id')?.invalid"
+                class="form-text text-danger">
+                KCDT Member ID is required.
+            </div>
+        </div>
+
+        <!-- Country Code & Mobile Number -->
+        <div class="mb-4">
+            <div class="d-flex flex-column flex-md-row gap-2">
+
+                <!-- PrimeNG select (DESKTOP only) -->
+                <p-floatlabel *ngIf="!isMobile" variant="on">
+                    <p-select inputId="country_code" [options]="countriesList" optionLabel="displayName" filter
+                        filterBy="displayName" fluid formControlName="country_code" required appendTo="self">
+                    </p-select>
+                    <label for="country_code">Country Code <span class="text-danger">*</span></label>
+                </p-floatlabel>
+
+                <!-- Native select (MOBILE only) -->
+                <div *ngIf="isMobile" class="flex-fill">
+                    <label class="form-label fw-semibold mb-2 d-block">Country Code <span
+                            class="text-danger">*</span></label>
+                    <select class="form-select form-select-lg mb-2" formControlName="country_code" required>
+                        <option *ngFor="let country of countriesList" [ngValue]="country">
+                            {{ country.displayName }}
+                        </option>
+                    </select>
+                </div>
+
+                <!-- Mobile number -->
+                <p-floatlabel variant="on" class="flex-fill">
+                    <p-inputnumber mode="decimal" inputId="mobile_number" [useGrouping]="false" fluid="true"
+                        [inputStyleClass]="invalidPhoneNumber ? 'form-control invalid-phone-number' : 'form-control'"
+                        [minlength]="mobileNumberMinLength" [maxlength]="mobileNumberMaxLength"
+                        formControlName="mobile_number" required>
+                    </p-inputnumber>
+                    <label for="mobile_number">Mobile number (WhatsApp) <span class="text-danger">*</span></label>
+                </p-floatlabel>
+
+            </div>
+
+            <div *ngIf="invalidPhoneNumber || (registerForm.get('mobile_number')?.touched && registerForm.get('mobile_number')?.invalid)"
+                class="form-text text-danger">
+                {{ mobileNumberErrorMsg }}
+            </div>
+            <div class="form-text">
+                All communications will be sent to this number.
+            </div>
+        </div>
+    </fieldset>
+</form>

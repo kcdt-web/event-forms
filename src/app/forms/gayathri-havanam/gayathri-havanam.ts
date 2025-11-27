@@ -32,7 +32,6 @@ import {
 import examples from 'libphonenumber-js/mobile/examples';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment.prod';
-import { ɵEmptyOutletComponent } from "@angular/router";
 
 interface Country {
   name: string;
@@ -62,7 +61,7 @@ interface Option {
     SelectModule,
     SelectButtonModule,
     PanelModule,
-    ButtonModule, ɵEmptyOutletComponent],
+    ButtonModule],
   templateUrl: './gayathri-havanam.html',
   styleUrl: './gayathri-havanam.scss',
 })

@@ -1,239 +1,249 @@
-<!-- Alert for errors -->
-<div *ngIf="submissionError" class="alert alert-danger">
-    {{ submissionError }}
-</div>
+<div *ngIf="!hideParent">
+    <!-- Alert for errors -->
+    <div *ngIf="submissionError" class="alert alert-danger">
+        {{ submissionError }}
+    </div>
 
-<!-- Success message -->
-@if (registrationSuccess) {
-<div class="alert p-4">
-    <h1>Registration Submitted Successfully!</h1>
-    <p>All future updates and important information regarding the event will be sent to the mobile number you provided
-        at the time of registration.</p>
-    <p>We look forward to your participation.</p>
-    <a class="btn btn-primary" href="/varanasi-event/">Back to event details</a>
-</div>
-} @else {
-<h1>Be Part of the Varanasi Event — Register Now!</h1>
-<p class="mb-4">Entry is strictly limited to registered participants only. Please use the form below to complete your
-    registration.
-</p>
+    <!-- Success message -->
+    @if (registrationSuccess) {
+    <div class="alert p-4">
+        <h1>Registration Submitted Successfully!</h1>
+        <p>All future updates and important information regarding the event will be sent to the mobile number you
+            provided
+            at the time of registration.</p>
+        <p>We look forward to your participation.</p>
+        <a class="btn btn-primary" href="/varanasi-event/">Back to event details</a>
+    </div>
+    } @else {
+    <h1>Be Part of the Varanasi Event — Register Now!</h1>
+    <p class="mb-4">Entry is strictly limited to registered participants only. Please use the form below to complete
+        your
+        registration.
+    </p>
 
-<!-- Registration form -->
-<form [formGroup]="registerForm" (ngSubmit)="onSubmit()">
-    <!-- Main Participant -->
-    <fieldset class="border rounded p-4 mb-4">
-        <legend class="h5 m-0 mb-4">Tell us about you</legend>
+    <!-- Registration form -->
+    <form [formGroup]="registerForm" (ngSubmit)="onSubmit()">
+        <!-- Main Participant -->
+        <fieldset class="border rounded p-4 mb-4">
+            <legend class="h5 m-0 mb-4">Tell us about you</legend>
 
-        <!-- KCDT Member ID -->
-        <div class="mb-4">
-            <p-floatlabel variant="on">
-                <p-inputnumber mode="decimal" inputId="member_id" [useGrouping]="false" inputStyleClass="form-control"
-                    fluid="true" formControlName="kcdt_member_id"></p-inputnumber>
-                <label for="member_id" class="form-label d-block">KCDT Member ID</label>
-            </p-floatlabel>
-            <div class="form-text">Optional - leave blank if not a member or unknown.</div>
-        </div>
-
-        <!-- Full Name -->
-        <div class="mb-4">
-            <p-floatlabel variant="on">
-                <input id="full_name" pInputText fluid="true" required formControlName="full_name" />
-                <label for="full_name">Full name <span class="text-danger">*</span></label>
-            </p-floatlabel>
-            <div *ngIf="registerForm.get('full_name')?.touched && registerForm.get('full_name')?.invalid"
-                class="form-text text-danger">
-                Name is required.
-            </div>
-        </div>
-
-        <!-- Country Code & Mobile Number -->
-        <div class="mb-4">
-            <div class="d-flex flex-column flex-md-row gap-2">
-
-                <!-- PrimeNG select (DESKTOP only) -->
-                <p-floatlabel *ngIf="!isMobile" variant="on">
-                    <p-select inputId="country_code" [options]="countriesList" optionLabel="displayName" filter
-                        filterBy="displayName" fluid formControlName="country_code" required appendTo="self">
-                    </p-select>
-                    <label for="country_code">Country Code <span class="text-danger">*</span></label>
+            <!-- KCDT Member ID -->
+            <div class="mb-4">
+                <p-floatlabel variant="on">
+                    <p-inputnumber mode="decimal" inputId="member_id" [useGrouping]="false"
+                        inputStyleClass="form-control" fluid="true" formControlName="kcdt_member_id"></p-inputnumber>
+                    <label for="member_id" class="form-label d-block">KCDT Member ID</label>
                 </p-floatlabel>
+                <div class="form-text">Optional - leave blank if not a member or unknown.</div>
+            </div>
 
-                <!-- Native select (MOBILE only) -->
-                <div *ngIf="isMobile" class="flex-fill">
-                    <label class="form-label fw-semibold mb-2 d-block">Country Code <span
-                            class="text-danger">*</span></label>
-                    <select class="form-select form-select-lg mb-2" formControlName="country_code" required>
-                        <option *ngFor="let country of countriesList" [ngValue]="country">
-                            {{ country.displayName }}
-                        </option>
-                    </select>
-                </div>
-
-                <!-- Mobile number -->
-                <p-floatlabel variant="on" class="flex-fill">
-                    <p-inputnumber mode="decimal" inputId="mobile_number" [useGrouping]="false" fluid="true"
-                        [inputStyleClass]="invalidPhoneNumber ? 'form-control invalid-phone-number' : 'form-control'"
-                        [minlength]="mobileNumberMinLength" [maxlength]="mobileNumberMaxLength"
-                        formControlName="mobile_number" required>
-                    </p-inputnumber>
-                    <label for="mobile_number">Mobile number (WhatsApp) <span class="text-danger">*</span></label>
+            <!-- Full Name -->
+            <div class="mb-4">
+                <p-floatlabel variant="on">
+                    <input id="full_name" pInputText fluid="true" required formControlName="full_name" />
+                    <label for="full_name">Full name <span class="text-danger">*</span></label>
                 </p-floatlabel>
-
-            </div>
-
-            <div *ngIf="invalidPhoneNumber || (registerForm.get('mobile_number')?.touched && registerForm.get('mobile_number')?.invalid)"
-                class="form-text text-danger">
-                {{ mobileNumberErrorMsg }}
-            </div>
-            <div class="form-text">
-                All communications will be sent to this number.
-            </div>
-        </div>
-
-        <!-- Gender -->
-        <div>
-            <label class="form-label d-block fw-semibold">Gender <span class="text-danger">*</span></label>
-            <p-selectbutton [options]="genderOptions" optionLabel="name" optionValue="value" required allowEmpty="false"
-                formControlName="gender"></p-selectbutton>
-            <div *ngIf="registerForm.get('gender')?.touched && registerForm.get('gender')?.invalid" class="text-danger">
-                Gender is required.
-            </div>
-        </div>
-    </fieldset>
-
-    <!-- Activities Selection -->
-    <fieldset class="border rounded p-4 mb-4">
-        <legend class="h5 m-0 mb-2">Which activities would you like to take part in? <span class="text-danger">*</span>
-        </legend>
-        <div>
-            <div class="d-flex text-muted small gap-2 align-items-center mb-4">
-                <i class="pi pi-info-circle"></i>
-                <span>Select at least one activity from the options below.</span>
-            </div>
-            <p-selectbutton id="activities" [options]="activityOptions" optionLabel="name" optionValue="value"
-                multiple="true" styleClass="d-flex flex-column border rounded"
-                class="d-flex flex-column gap-2 activities" formControlName="activities" required>
-                <ng-template #item let-item>
-                    <div>
-                        <div class="small text-muted fw-regular">{{ item.name.split(' - ')[0] }}</div>
-                        <div>{{ item.name.split(' - ')[1] }}</div>
-                    </div>
-                </ng-template>
-            </p-selectbutton>
-
-            <div *ngIf="registerForm.get('activities')?.touched && registerForm.get('activities')?.invalid"
-                class="text-danger">
-                Please select at least one activity.
-            </div>
-        </div>
-    </fieldset>
-
-    <!-- Accompanying Participants -->
-    <fieldset class="border rounded p-4 mb-4">
-        <legend class="h5 m-0 mb-4">Who else is accompanying you?</legend>
-
-        <div formArrayName="accompanyingParticipants">
-            <div *ngFor="let participant of accompanyingParticipants.controls; let i=index" [formGroupName]="i"
-                class="border rounded p-3 mb-3 bg-light">
-
-                <div class="d-flex justify-content-between mb-3">
-                    <h6 class="h5 m-0">Participant {{ i + 1 }} Details</h6>
-                    <button type="button" class="btn btn-danger btn-sm" (click)="removeParticipant(i)">Remove</button>
+                <div *ngIf="registerForm.get('full_name')?.touched && registerForm.get('full_name')?.invalid"
+                    class="form-text text-danger">
+                    Name is required.
                 </div>
+            </div>
 
-                <!-- KCDT Member ID -->
-                <div class="mb-4">
-                    <p-floatlabel variant="on">
-                        <p-inputnumber mode="decimal" [useGrouping]="false" inputStyleClass="form-control" fluid="true"
-                            formControlName="kcdt_member_id"></p-inputnumber>
-                        <label>KCDT Member ID</label>
+            <!-- Country Code & Mobile Number -->
+            <div class="mb-4">
+                <div class="d-flex flex-column flex-md-row gap-2">
+
+                    <!-- PrimeNG select (DESKTOP only) -->
+                    <p-floatlabel *ngIf="!isMobile" variant="on">
+                        <p-select inputId="country_code" [options]="countriesList" optionLabel="displayName" filter
+                            filterBy="displayName" fluid formControlName="country_code" required appendTo="self">
+                        </p-select>
+                        <label for="country_code">Country Code <span class="text-danger">*</span></label>
                     </p-floatlabel>
-                    <div class="form-text">Optional - leave blank if not a member or unknown.</div>
-                </div>
 
-                <!-- Full Name -->
-                <div class="mb-4">
-                    <p-floatlabel variant="on">
-                        <input pInputText formControlName="full_name" fluid="true" required />
-                        <label>Full name <span class="text-danger">*</span></label>
-                    </p-floatlabel>
-                    <div *ngIf="participant.get('full_name')?.touched && participant.get('full_name')?.invalid"
-                        class="text-danger">
-                        Name is required.
+                    <!-- Native select (MOBILE only) -->
+                    <div *ngIf="isMobile" class="flex-fill">
+                        <label class="form-label fw-semibold mb-2 d-block">Country Code <span
+                                class="text-danger">*</span></label>
+                        <select class="form-select form-select-lg mb-2" formControlName="country_code" required>
+                            <option *ngFor="let country of countriesList" [ngValue]="country">
+                                {{ country.displayName }}
+                            </option>
+                        </select>
                     </div>
+
+                    <!-- Mobile number -->
+                    <p-floatlabel variant="on" class="flex-fill">
+                        <p-inputnumber mode="decimal" inputId="mobile_number" [useGrouping]="false" fluid="true"
+                            [inputStyleClass]="invalidPhoneNumber ? 'form-control invalid-phone-number' : 'form-control'"
+                            [minlength]="mobileNumberMinLength" [maxlength]="mobileNumberMaxLength"
+                            formControlName="mobile_number" required>
+                        </p-inputnumber>
+                        <label for="mobile_number">Mobile number (WhatsApp) <span class="text-danger">*</span></label>
+                    </p-floatlabel>
+
                 </div>
 
-                <div class="mb-4">
-                    <div class="d-flex flex-column flex-md-row gap-2">
-                        <!-- PrimeNG select (DESKTOP only) -->
-                        <p-floatlabel *ngIf="!isMobile" variant="on">
-                            <p-select inputId="country_code" [options]="countriesList" optionLabel="displayName" filter
-                                filterBy="displayName" fluid formControlName="country_code" required appendTo="self">
-                            </p-select>
-                            <label for="country_code">Country Code </label>
-                        </p-floatlabel>
+                <div *ngIf="invalidPhoneNumber || (registerForm.get('mobile_number')?.touched && registerForm.get('mobile_number')?.invalid)"
+                    class="form-text text-danger">
+                    {{ mobileNumberErrorMsg }}
+                </div>
+                <div class="form-text">
+                    All communications will be sent to this number.
+                </div>
+            </div>
 
-                        <!-- Native select (MOBILE only) -->
-                        <div *ngIf="isMobile" class="flex-fill">
-                            <label class="form-label fw-semibold mb-2 d-block">Country Code </label>
-                            <select class="form-select form-select-lg mb-2" formControlName="country_code" required>
-                                <option *ngFor="let country of countriesList" [ngValue]="country">
-                                    {{ country.displayName }}
-                                </option>
-                            </select>
+            <!-- Gender -->
+            <div>
+                <label class="form-label d-block fw-semibold">Gender <span class="text-danger">*</span></label>
+                <p-selectbutton [options]="genderOptions" optionLabel="name" optionValue="value" required
+                    allowEmpty="false" formControlName="gender"></p-selectbutton>
+                <div *ngIf="registerForm.get('gender')?.touched && registerForm.get('gender')?.invalid"
+                    class="text-danger">
+                    Gender is required.
+                </div>
+            </div>
+        </fieldset>
+
+        <!-- Activities Selection -->
+        <fieldset class="border rounded p-4 mb-4">
+            <legend class="h5 m-0 mb-2">Which activities would you like to take part in? <span
+                    class="text-danger">*</span>
+            </legend>
+            <div>
+                <div class="d-flex text-muted small gap-2 align-items-center mb-4">
+                    <i class="pi pi-info-circle"></i>
+                    <span>Select at least one activity from the options below.</span>
+                </div>
+                <p-selectbutton id="activities" [options]="activityOptions" optionLabel="name" optionValue="value"
+                    multiple="true" styleClass="d-flex flex-column border rounded"
+                    class="d-flex flex-column gap-2 activities" formControlName="activities" required>
+                    <ng-template #item let-item>
+                        <div>
+                            <div class="small text-muted fw-regular">{{ item.name.split(' - ')[0] }}</div>
+                            <div>{{ item.name.split(' - ')[1] }}</div>
                         </div>
+                    </ng-template>
+                </p-selectbutton>
 
-                        <!-- Mobile number -->
-                        <p-floatlabel variant="on" class="flex-fill">
-                            <p-inputnumber mode="decimal" [useGrouping]="false" formControlName="mobile_number"
-                                fluid="true" [minlength]="mobileNumberMinLength" [maxlength]="mobileNumberMaxLength"
-                                inputStyleClass="form-control"></p-inputnumber>
-                            <label>Mobile number (WhatsApp)</label>
-                        </p-floatlabel>
-
-                    </div>
-                    <div *ngIf="participant.get('mobile_number')?.touched && participant.get('mobile_number')?.invalid"
-                        class="text-danger">Invalid mobile number.</div>
-                </div>
-
-                <!-- Gender -->
-                <div class="mb-4">
-                    <p class="form-label fw-semibold">Gender <span class="text-danger">*</span></p>
-                    <p-selectbutton [options]="genderOptions" optionLabel="name" optionValue="value" required
-                        allowEmpty="false" formControlName="gender"></p-selectbutton>
-                    <div *ngIf="participant.get('gender')?.touched && participant.get('gender')?.invalid"
-                        class="text-danger">Gender is required.</div>
-                </div>
-
-                <!-- Activities -->
-                <div>
-                    <p class="form-label fw-semibold">Which activities would this participant take part in? <span
-                            class="text-danger">*</span></p>
-                    <div class="d-flex text-muted small gap-2 align-items-center mb-4">
-                        <i class="pi pi-info-circle"></i>
-                        <span>Select at least one activity from the options below.</span>
-                    </div>
-                    <p-selectbutton [options]="activityOptions" optionLabel="name" optionValue="value" multiple="true"
-                        styleClass="d-flex flex-column border rounded" formControlName="activities"
-                        class="d-flex flex-column gap-2 activities" required>
-                        <ng-template #item let-item>
-                            <div>
-                                <div class="small text-muted fw-regular">{{ item.name.split(' - ')[0] }}</div>
-                                <div>{{ item.name.split(' - ')[1] }}</div>
-                            </div>
-                        </ng-template>
-                    </p-selectbutton>
-
-                    <div *ngIf="participant.get('activities')?.touched && participant.get('activities')?.invalid"
-                        class="text-danger">Please select at least one activity.</div>
+                <div *ngIf="registerForm.get('activities')?.touched && registerForm.get('activities')?.invalid"
+                    class="text-danger">
+                    Please select at least one activity.
                 </div>
             </div>
-        </div>
+        </fieldset>
 
-        <p-button label="Add participant" variant="outlined" type="button" (click)="addParticipant()"></p-button>
-    </fieldset>
+        <!-- Accompanying Participants -->
+        <fieldset class="border rounded p-4 mb-4">
+            <legend class="h5 m-0 mb-4">Who else is accompanying you?</legend>
 
-    <!-- Submit Button -->
-    <p-button styleClass="kcdt-primary-button" type="submit" label="Register" [loading]="loading"></p-button>
-</form>
-}
+            <div formArrayName="accompanyingParticipants">
+                <div *ngFor="let participant of accompanyingParticipants.controls; let i=index" [formGroupName]="i"
+                    class="border rounded p-3 mb-3 bg-light">
+
+                    <div class="d-flex justify-content-between mb-3">
+                        <h6 class="h5 m-0">Participant {{ i + 1 }} Details</h6>
+                        <button type="button" class="btn btn-danger btn-sm"
+                            (click)="removeParticipant(i)">Remove</button>
+                    </div>
+
+                    <!-- KCDT Member ID -->
+                    <div class="mb-4">
+                        <p-floatlabel variant="on">
+                            <p-inputnumber mode="decimal" [useGrouping]="false" inputStyleClass="form-control"
+                                fluid="true" formControlName="kcdt_member_id"></p-inputnumber>
+                            <label>KCDT Member ID</label>
+                        </p-floatlabel>
+                        <div class="form-text">Optional - leave blank if not a member or unknown.</div>
+                    </div>
+
+                    <!-- Full Name -->
+                    <div class="mb-4">
+                        <p-floatlabel variant="on">
+                            <input pInputText formControlName="full_name" fluid="true" required />
+                            <label>Full name <span class="text-danger">*</span></label>
+                        </p-floatlabel>
+                        <div *ngIf="participant.get('full_name')?.touched && participant.get('full_name')?.invalid"
+                            class="text-danger">
+                            Name is required.
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="d-flex flex-column flex-md-row gap-2">
+                            <!-- PrimeNG select (DESKTOP only) -->
+                            <p-floatlabel *ngIf="!isMobile" variant="on">
+                                <p-select inputId="country_code" [options]="countriesList" optionLabel="displayName"
+                                    filter filterBy="displayName" fluid formControlName="country_code" required
+                                    appendTo="self">
+                                </p-select>
+                                <label for="country_code">Country Code </label>
+                            </p-floatlabel>
+
+                            <!-- Native select (MOBILE only) -->
+                            <div *ngIf="isMobile" class="flex-fill">
+                                <label class="form-label fw-semibold mb-2 d-block">Country Code </label>
+                                <select class="form-select form-select-lg mb-2" formControlName="country_code" required>
+                                    <option *ngFor="let country of countriesList" [ngValue]="country">
+                                        {{ country.displayName }}
+                                    </option>
+                                </select>
+                            </div>
+
+                            <!-- Mobile number -->
+                            <p-floatlabel variant="on" class="flex-fill">
+                                <p-inputnumber mode="decimal" [useGrouping]="false" formControlName="mobile_number"
+                                    fluid="true" [minlength]="mobileNumberMinLength" [maxlength]="mobileNumberMaxLength"
+                                    inputStyleClass="form-control"></p-inputnumber>
+                                <label>Mobile number (WhatsApp)</label>
+                            </p-floatlabel>
+
+                        </div>
+                        <div *ngIf="participant.get('mobile_number')?.touched && participant.get('mobile_number')?.invalid"
+                            class="text-danger">Invalid mobile number.</div>
+                    </div>
+
+                    <!-- Gender -->
+                    <div class="mb-4">
+                        <p class="form-label fw-semibold">Gender <span class="text-danger">*</span></p>
+                        <p-selectbutton [options]="genderOptions" optionLabel="name" optionValue="value" required
+                            allowEmpty="false" formControlName="gender"></p-selectbutton>
+                        <div *ngIf="participant.get('gender')?.touched && participant.get('gender')?.invalid"
+                            class="text-danger">Gender is required.</div>
+                    </div>
+
+                    <!-- Activities -->
+                    <div>
+                        <p class="form-label fw-semibold">Which activities would this participant take part in? <span
+                                class="text-danger">*</span></p>
+                        <div class="d-flex text-muted small gap-2 align-items-center mb-4">
+                            <i class="pi pi-info-circle"></i>
+                            <span>Select at least one activity from the options below.</span>
+                        </div>
+                        <p-selectbutton [options]="activityOptions" optionLabel="name" optionValue="value"
+                            multiple="true" styleClass="d-flex flex-column border rounded" formControlName="activities"
+                            class="d-flex flex-column gap-2 activities" required>
+                            <ng-template #item let-item>
+                                <div>
+                                    <div class="small text-muted fw-regular">{{ item.name.split(' - ')[0] }}</div>
+                                    <div>{{ item.name.split(' - ')[1] }}</div>
+                                </div>
+                            </ng-template>
+                        </p-selectbutton>
+
+                        <div *ngIf="participant.get('activities')?.touched && participant.get('activities')?.invalid"
+                            class="text-danger">Please select at least one activity.</div>
+                    </div>
+                </div>
+            </div>
+
+            <p-button label="Add participant" variant="outlined" type="button" (click)="addParticipant()"></p-button>
+        </fieldset>
+
+        <!-- Submit Button -->
+        <p-button styleClass="kcdt-primary-button" type="submit" label="Register" [loading]="loading"></p-button>
+    </form>
+    }
+</div>
+
+<router-outlet />

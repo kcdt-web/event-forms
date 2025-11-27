@@ -209,7 +209,7 @@
                     <ng-template #header>
                         <div class="d-flex flex-column py-2">
                             <div class="fw-semibold">Day 3 - 16 March 2026</div>
-                            <div class="text-muted small">{{ getSelectedCount('day2') }} of 4 selected</div>
+                            <div class="text-muted small">{{ getSelectedCount('day2') }} of 2 selected</div>
                         </div>
                     </ng-template>
                     <div formGroupName="activities">
@@ -256,7 +256,7 @@
 
             <div *ngIf="(registerForm.get('activities')?.touched || registerForm.get('activities')?.dirty) 
             && registerForm.get('activities')?.errors?.['noDaysSelected']" class="text-danger mt-2 small">
-                Please sselect at least one 1-hour slot.
+                Please select at least one 1-hour slot.
             </div>
 
 
