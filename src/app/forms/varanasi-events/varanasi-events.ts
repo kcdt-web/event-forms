@@ -312,7 +312,7 @@ export class VaranasiEvents implements OnInit {
     this.submitted = true;
     this.loading = true;
     this.submissionError = '';
-    setTimeout(() => this.cd.detectChanges(), 0);
+    this.cd.detectChanges()
 
     try {
       const verified = await this.validateRecaptcha.verifyRecaptcha();
@@ -320,7 +320,7 @@ export class VaranasiEvents implements OnInit {
       if (!verified) {
         this.submissionError = '[EC-TVF] Verification failed';
         this.loading = false;
-        setTimeout(() => this.cd.detectChanges(), 0);
+        this.cd.detectChanges()
         return;
       }
 
@@ -541,7 +541,7 @@ export class VaranasiEvents implements OnInit {
       if (!verified) {
         this.submissionError = 'reCAPTCHA verification failed';
         this.loading = false;
-        setTimeout(() => this.cd.detectChanges(), 0);
+        this.cd.detectChanges()
         return;
       }
 
@@ -567,13 +567,13 @@ export class VaranasiEvents implements OnInit {
       this.accompanyingParticipant = data.accompParticipants
       this.loading = false;
 
-      setTimeout(() => this.cd.detectChanges(), 0);
+      this.cd.detectChanges()
 
     } catch (err: any) {
       this.submissionError = 'Search failed: ' + (err?.message || 'Unknown error');
     } finally {
       this.loading = false;
-      setTimeout(() => this.cd.detectChanges(), 0);
+      this.cd.detectChanges()
     }
   }
 
@@ -587,7 +587,6 @@ export class VaranasiEvents implements OnInit {
     if (!confirmed) return;
 
     this.loading = true;
-    setTimeout(() => this.cd.detectChanges(), 0);
 
     try {
       // eCAPTCHA verification
@@ -595,7 +594,7 @@ export class VaranasiEvents implements OnInit {
       if (!verified) {
         this.submissionError = 'reCAPTCHA verification failed';
         this.loading = false;
-        setTimeout(() => this.cd.detectChanges(), 0);
+        this.cd.detectChanges()
         return;
       }
 
@@ -613,17 +612,16 @@ export class VaranasiEvents implements OnInit {
       const data = await resp.json();
       if (!resp.ok || !data.success) throw new Error(data.error || 'Withdrawal failed');
 
-      this.mainParticipant = data.mainParticipant;
-      this.accompanyingParticipant = data.accompParticipants;
 
+      this.mainParticipant.status = false;
       this.loading = false;
-      setTimeout(() => this.cd.detectChanges(), 0);
+      this.cd.detectChanges()
 
     } catch (err: any) {
       this.submissionError = 'Withdrawal failed: ' + (err?.message || 'Unknown error');
     } finally {
       this.loading = false;
-      setTimeout(() => this.cd.detectChanges(), 0);
+      this.cd.detectChanges()
     }
   }
 
