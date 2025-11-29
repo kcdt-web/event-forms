@@ -1,13 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 
-import { RegisterParticipants } from './register-participants';
+import { ValidateRecaptcha } from './validate-recaptcha';
 
-describe('RegisterParticipants', () => {
-  let service: RegisterParticipants;
+describe('ValidateRecaptcha', () => {
+  let service: ValidateRecaptcha;
 
   beforeEach(() => {
     TestBed.configureTestingModule({});
-    service = TestBed.inject(RegisterParticipants);
+    service = TestBed.inject(ValidateRecaptcha);
   });
 
   it('should be created', () => {

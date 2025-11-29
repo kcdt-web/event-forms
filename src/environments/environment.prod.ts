@@ -8,5 +8,7 @@ export const environment = {
     varanasiAccompanyingTable: "varanasi_event_accompanying_participants",
     gayathriHavanamRegistrationEdgeFunction: "https://pxjvvcdfaaakyuglmvig.supabase.co/functions/v1/gayathri-havanam-registrations",
     gayathriHavanamSlotsEdgeFunction: "https://pxjvvcdfaaakyuglmvig.supabase.co/functions/v1/get-available-slots",
-    gayathriHavanamWaitlists: "https://pxjvvcdfaaakyuglmvig.supabase.co/functions/v1/waitlists"
+    gayathriHavanamWaitlists: "https://pxjvvcdfaaakyuglmvig.supabase.co/functions/v1/waitlists",
+    recaptchaEdgeFunction: "https://blopfvarveykkggbpkfr.supabase.co/functions/v1/recaptcha-verify",
+    searchEdgeFunction: "https://blopfvarveykkggbpkfr.supabase.co/functions/v1/search-registration"
 };

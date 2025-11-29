@@ -15,12 +15,14 @@
 </div>
 } @else {
 <h1>Be Part of the Varanasi Event — Register Now!</h1>
-<p class="mb-4">Entry is strictly limited to registered participants only. Please use the form below to complete
-    your registration.
+<p class="mb-4">Entry is strictly limited to registered participants only. Please use the form below to complete your
+    registration.
 </p>
 
-<!-- <p-button (click)="viewRegistration? viewRegistration = false : viewRegistration = true" label="Show" /> -->
-
+@if (!viewRegistration) {
+<div class="mb-4"><span class="fw-semibold">Already registered?</span><p-button
+        (click)="viewRegistration? viewRegistration = false : viewRegistration = true; resetForm()"
+        label="Search your registration" link styleClass="p-0 px-1" /></div>
 <!-- Registration form -->
 <form [formGroup]="registerForm" (ngSubmit)="onSubmit()">
     <!-- Main Participant -->
@@ -239,20 +241,133 @@
     <!-- Submit Button -->
     <p-button styleClass="kcdt-primary-button" type="submit" label="Register" [loading]="loading"></p-button>
 </form>
-}
+} @else {
+<div class="mb-4"><span class="fw-semibold">Not registered yet?</span><p-button
+        (click)="viewRegistration? viewRegistration = false : viewRegistration = true; resetForm();"
+        label="Submit your registration" link styleClass="p-0 px-1" /></div>
+<form [formGroup]="searchForm" (ngSubmit)="searchRegistration()">
 
-<p-dialog header="Edit Profile" [modal]="true" [(visible)]="viewRegistration" [style]="{ width: '25rem' }">
-    <span class="p-text-secondary block mb-8">Update your information.</span>
-    <div class="flex items-center gap-4 mb-4">
-        <label for="username" class="font-semibold w-24">Username</label>
-        <input pInputText id="username" class="flex-auto" autocomplete="off" />
-    </div>
-    <div class="flex items-center gap-4 mb-8">
-        <label for="email" class="font-semibold w-24">Email</label>
-        <input pInputText id="email" class="flex-auto" autocomplete="off" />
-    </div>
-    <div class="flex justify-end gap-2">
-        <p-button label="Cancel" severity="secondary" (click)="viewRegistration = false" />
-        <p-button label="Save" (click)="viewRegistration = false" />
-    </div>
-</p-dialog>
+    @if (!mainParticipant) {
+    <fieldset class="border rounded p-4 mb-4">
+        <legend class="h5 m-0 mb-4">Search your registration</legend>
+        <div class="mb-4">
+            <div class="d-flex flex-column flex-md-row gap-2">
+
+                <!-- Desktop country select -->
+                <p-floatlabel *ngIf="!isMobile" variant="on">
+                    <p-select inputId="country_code" [options]="countriesList" optionLabel="displayName" filter
+                        filterBy="displayName" fluid formControlName="country_code" required appendTo="self">
+                    </p-select>
+                    <label for="country_code">Country Code <span class="text-danger">*</span></label>
+                </p-floatlabel>
+
+                <!-- Mobile country select -->
+                <div *ngIf="isMobile" class="flex-fill">
+                    <label class="form-label fw-semibold mb-2 d-block">Country Code <span
+                            class="text-danger">*</span></label>
+                    <select class="form-select form-select-lg mb-2" formControlName="country_code" required>
+                        <option *ngFor="let country of countriesList" [ngValue]="country">
+                            {{ country.displayName }}
+                        </option>
+                    </select>
+                </div>
+
+                <!-- Mobile number input -->
+                <p-floatlabel variant="on" class="flex-fill">
+                    <p-inputnumber mode="decimal" inputId="mobile_number" [useGrouping]="false" fluid="true"
+                        [inputStyleClass]="invalidSearchNumber ? 'form-control invalid-phone-number' : 'form-control'"
+                        [minlength]="mobileNumberMinLength" [maxlength]="mobileNumberMaxLength"
+                        formControlName="mobile_number" required>
+                    </p-inputnumber>
+                    <label for="mobile_number">Mobile number (WhatsApp) <span class="text-danger">*</span></label>
+                </p-floatlabel>
+
+            </div>
+
+            <div *ngIf="invalidSearchNumber || (searchForm.get('mobile_number')?.touched && searchForm.get('mobile_number')?.invalid)"
+                class="form-text text-danger">
+                {{ mobileNumberErrorMsg }}
+            </div>
+            <div class="form-text">
+                Use the mobile number you provided during registration.
+            </div>
+        </div>
+        <p-button type="submit" label="Search" [loading]="loading"></p-button>
+    </fieldset>
+    }
+
+    @if (mainParticipant) {
+    <fieldset class="border rounded p-4 mb-4">
+        <legend class="h5 m-0 mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <span>Search Results</span>
+                <p-button (click)="resetForm()" label="New Search" link styleClass="p-0 px-1" />
+            </div>
+        </legend>
+
+        @if (!mainParticipant.status){
+        <div class="alert alert-danger">
+            You have withdrawn your registration. To participate in the event, register again along with your
+            accompanying participants, or reach out to us at <a href="tel:+919494877171">9494877171</a>.
+        </div>
+        }
+
+        <p-panel class="mb-4" showHeader="false">
+            <div class=" mb-4">
+                <p class="text-muted small m-0 mb-1">Registered On</p>
+                <p class="fw-semibold m-0">{{mainParticipant.registered_on | date:'medium':'local'}}</p>
+            </div>
+            <div class="mb-4">
+                <p class="text-muted small m-0 mb-1">Registration Status</p>
+                <p class="fw-semibold m-0">
+                    @if (mainParticipant.status) {
+                    <p-tag severity="success" value="Active" />
+                    } @else {
+                    <p-tag severity="danger" value="Withdrawn" />
+                    }
+                </p>
+            </div>
+            <div class="mb-4">
+                <p class="text-muted small m-0 mb-1">Accompanying Participants</p>
+                <p class="fw-semibold m-0">{{accompanyingParticipant.length || '0'}}</p>
+            </div>
+
+            @if (mainParticipant.status){
+            <p-button label="Withdraw" variant="outlined" severity="danger" (click)="withdrawRegistration()"
+                [disabled]="loading" />
+            }
+        </p-panel>
+
+        <h6 class="m-0 mb-2">Participant details</h6>
+        <p-panel [toggleable]="true" class="mb-4">
+            <ng-template #header>
+                <div class="d-flex flex-column py-2">
+                    <div class="fw-semibold">{{mainParticipant.full_name}}</div>
+                    <div class="text-muted small">Primary Participant</div>
+                </div>
+            </ng-template>
+            <p class="fw-semibold">Opted Activities</p>
+            <ul>
+                <li *ngFor="let activity of mainParticipant.activities">{{activity}}</li>
+            </ul>
+        </p-panel>
+
+        <div *ngFor="let accomp of accompanyingParticipant;let i=index">
+            <p-panel [toggleable]="true" class="mb-4">
+                <ng-template #header>
+                    <div class="d-flex flex-column py-2">
+                        <div class="fw-semibold">{{accomp.full_name}}</div>
+                        <div class="text-muted small">Primary Participant</div>
+                    </div>
+                </ng-template>
+                <p class="fw-semibold">Opted Activities</p>
+                <ul>
+                    <li *ngFor="let activity of accomp.activities">{{activity}}</li>
+                </ul>
+            </p-panel>
+        </div>
+    </fieldset>
+    }
+</form>
+}
+}

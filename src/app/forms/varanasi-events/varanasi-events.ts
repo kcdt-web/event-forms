@@ -21,18 +21,14 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { SelectModule } from 'primeng/select';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { ButtonModule } from 'primeng/button';
-import { DialogModule } from 'primeng/dialog';
-import { ReCaptchaV3Service } from 'ng-recaptcha';
+import { PanelModule } from 'primeng/panel';
+import { TagModule } from 'primeng/tag';
 import { countries } from 'countries-list';
-import {
-  CountryCode,
-  isValidPhoneNumber,
-  parsePhoneNumberFromString,
-  getExampleNumber,
-} from 'libphonenumber-js';
-import examples from 'libphonenumber-js/mobile/examples';
-import { firstValueFrom } from 'rxjs';
+
 import { environment } from '../../../environments/environment.prod';
+
+import { ValidateMobileNumber } from '../../services/validate-mobile-number/validate-mobile-number';
+import { ValidateRecaptcha } from '../../services/validate-recaptcha/validate-recaptcha';
 
 interface Country {
   name: string;
@@ -44,6 +40,15 @@ interface Country {
 interface Option {
   name: string;
   value: string;
+}
+
+interface Participant {
+  registered_on: string;
+  kcdt_member_id: number | null;
+  full_name: string;
+  activities: string[];
+  status: boolean;
+  mobile_number: string
 }
 
 @Component({
@@ -60,11 +65,13 @@ interface Option {
     SelectModule,
     SelectButtonModule,
     ButtonModule,
-    DialogModule
+    PanelModule,
+    TagModule
   ],
 })
 export class VaranasiEvents implements OnInit {
   registerForm!: FormGroup;
+  searchForm!: FormGroup;
   countriesList: Country[] = [];
   genderOptions: Option[] = [];
   activityOptions: Option[] = [];
@@ -77,13 +84,18 @@ export class VaranasiEvents implements OnInit {
   submissionError = '';
   submitted = false;
   isMobile = false;
+
   viewRegistration = false;
+  invalidSearchNumber = false
+  mainParticipant!: Participant | null;
+  accompanyingParticipant!: Participant[];
 
   constructor(
     private fb: FormBuilder,
     private cd: ChangeDetectorRef,
     private el: ElementRef,
-    private recaptchaV3Service: ReCaptchaV3Service,
+    private validateMobileNumber: ValidateMobileNumber,
+    private validateRecaptcha: ValidateRecaptcha
   ) { }
 
   ngOnInit(): void {
@@ -97,6 +109,7 @@ export class VaranasiEvents implements OnInit {
 
     this.initializeForm(defaultCountry);
     this.handleFormChanges();
+    this.handleSearchFormChanges();
   }
 
   /** Prevent accidental page exit */
@@ -157,12 +170,12 @@ export class VaranasiEvents implements OnInit {
       accompanyingParticipants: this.fb.array([]),
     });
 
-    /** Apply dynamic validators */
-    this.setMobileValidators(
-      this.registerForm.get('mobile_number')!,
-      defaultCountry?.iso2,
-      true
-    );
+    this.searchForm = this.fb.group({
+      country_code: [this.getCountryByIso('IN') || null, Validators.required],
+      mobile_number: [null, Validators.required],
+    });
+
+
   }
 
   /** Activities min selected */
@@ -196,20 +209,32 @@ export class VaranasiEvents implements OnInit {
     const phoneCtrl = participant.get('mobile_number')!;
 
     /** Re-run validators on country change */
-    participant.get('country_code')!.valueChanges.subscribe((country) => {
+    participant.get('country_code')!.valueChanges.subscribe((country: Country | null) => {
       if (!country) return;
-      this.updatePhoneLength(country.iso2);
-      this.setMobileValidators(phoneCtrl, country.iso2);
+
+      // Update max length using the service
+      this.mobileNumberMaxLength = this.validateMobileNumber.getPhoneMaxLength(country.iso2);
+
+      // Apply validators using the service
+      this.validateMobileNumber.applyMobileValidators(
+        phoneCtrl,
+        country.iso2,
+        false, // participant mobile can be optional
+        this.mobileNumberMinLength,
+        this.mobileNumberMaxLength
+      );
+
       phoneCtrl.updateValueAndValidity();
     });
+
 
     /** participant phone validation on blur */
     phoneCtrl.valueChanges.subscribe((value) => {
       const country = participant.get('country_code')!.value as Country | null;
       if (!country || phoneCtrl.pristine || !value) return;
 
-      const valid = isValidPhoneNumber(String(value), country.iso2 as CountryCode) &&
-        String(value).length === this.mobileNumberMaxLength;
+      const participantMaxLength = this.validateMobileNumber.getPhoneMaxLength(country.iso2);
+      const valid = this.validateMobileNumber.isPhoneValid(value, country.iso2, participantMaxLength);
 
       if (!valid) phoneCtrl.setErrors({ invalidPhone: true });
       else phoneCtrl.setErrors(null);
@@ -224,43 +249,36 @@ export class VaranasiEvents implements OnInit {
     }
   }
 
-  /** Dynamically assign validators based on country selection */
-  private setMobileValidators(control: AbstractControl, countryIso2?: string, required = false): void {
-    const validators = [
-      ...(required ? [Validators.required] : []),
-      Validators.pattern('^[0-9]*$'),
-      Validators.minLength(this.mobileNumberMinLength),
-      Validators.maxLength(this.mobileNumberMaxLength),
-      this.optionalPhoneValidator(countryIso2),
-    ];
-    control.setValidators(validators);
-  }
-
-  /** Allow empty phone but validate if present */
-  private optionalPhoneValidator(countryIso2?: string) {
-    return (control: AbstractControl) => {
-      if (!control.value) return null;
-      const valid = isValidPhoneNumber(String(control.value), countryIso2 as CountryCode);
-      return valid ? null : { invalidPhone: true };
-    };
-  }
 
   /** Listen to main form changes */
   private handleFormChanges(): void {
     const mobileCtrl = this.registerForm.get('mobile_number')!;
     this.registerForm.get('country_code')!.valueChanges.subscribe((country: Country | null) => {
       if (!country) return;
-      this.updatePhoneLength(country.iso2);
-      this.setMobileValidators(mobileCtrl, country.iso2, true);
+
+      this.mobileNumberMaxLength = this.validateMobileNumber.getPhoneMaxLength(country.iso2);
+
+      this.validateMobileNumber.applyMobileValidators(
+        mobileCtrl,
+        country.iso2,
+        true, // main mobile number is required
+        this.mobileNumberMinLength,
+        this.mobileNumberMaxLength
+      );
+
       mobileCtrl.updateValueAndValidity();
     });
+
 
     mobileCtrl.valueChanges.subscribe((value) => {
       const country: Country = this.registerForm.get('country_code')!.value;
       if (!country || mobileCtrl.pristine) return;
 
-      const valid = isValidPhoneNumber(String(value), country.iso2 as CountryCode) &&
-        String(value).length === this.mobileNumberMaxLength;
+      const valid = this.validateMobileNumber.isPhoneValid(
+        value,
+        country.iso2,
+        this.mobileNumberMaxLength
+      );
 
       this.invalidPhoneNumber = !valid;
       this.mobileNumberErrorMsg = valid ? '' : 'Invalid phone number.';
@@ -270,13 +288,8 @@ export class VaranasiEvents implements OnInit {
   /** Dynamic phone length from example number */
   private updatePhoneLength(countryIso2?: string): void {
     if (!countryIso2) return;
-    try {
-      const example = getExampleNumber(countryIso2 as CountryCode, examples);
-      const length = example?.nationalNumber?.length;
-      this.mobileNumberMaxLength = length || 15;
-    } catch {
-      this.mobileNumberMaxLength = 15;
-    }
+    this.mobileNumberMaxLength =
+      this.validateMobileNumber.getPhoneMaxLength(countryIso2);
   }
 
   /** Scroll to first invalid input */
@@ -299,49 +312,41 @@ export class VaranasiEvents implements OnInit {
     this.submitted = true;
     this.loading = true;
     this.submissionError = '';
-    this.cd.detectChanges();
+    setTimeout(() => this.cd.detectChanges(), 0);
 
     try {
-      // 1) Run reCAPTCHA v3
-      const token = await firstValueFrom(this.recaptchaV3Service.execute('submit'));
-      if (!token) throw new Error('reCAPTCHA failed');
+      const verified = await this.validateRecaptcha.verifyRecaptcha();
 
-      // 2) Verify token on server (Edge Function)
-      const verifyResp = await fetch(
-        'https://blopfvarveykkggbpkfr.supabase.co/functions/v1/recaptcha-verify',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token }),
-        }
-      );
-
-      const verifyData = await verifyResp.json();
-      if (!verifyResp.ok || !verifyData.success) {
+      if (!verified) {
         this.submissionError = '[EC-TVF] Verification failed';
         this.loading = false;
-        this.cd.detectChanges();
+        setTimeout(() => this.cd.detectChanges(), 0);
         return;
       }
 
-      // 3) Process form submission via Edge Function
       await this.processFormSubmission();
     } catch (err: any) {
       this.submissionError = '[EC-GE] ' + (err?.message || 'Unknown error');
     } finally {
       this.loading = false;
-      this.scrollToTop();
-      this.cd.detectChanges();
+      setTimeout(() => {
+        this.scrollToTop();
+        this.cd.detectChanges();
+      }, 0);
     }
   }
 
   resetForm(): void {
+    this.searchForm.reset();
+    this.registerForm.reset();
     const defaultCountry = this.getCountryByIso('IN');
     this.accompanyingParticipants.clear();
     this.initializeForm(defaultCountry);
     this.registrationSuccess = false;
     this.submissionError = '';
     this.submitted = false;
+    this.mainParticipant = null;
+    this.accompanyingParticipant = [];
   }
 
   private scrollToTop(): void {
@@ -353,11 +358,20 @@ export class VaranasiEvents implements OnInit {
     const mainMobile = this.registerForm.get('mobile_number')!;
     const mainCountry: Country | null = this.registerForm.get('country_code')!.value;
 
-    const mainValid =
-      mainMobile.value &&
-      mainCountry &&
-      isValidPhoneNumber(String(mainMobile.value), mainCountry.iso2 as CountryCode) &&
-      String(mainMobile.value).length === this.mobileNumberMaxLength;
+    if (!mainCountry || !mainCountry.iso2) {
+      mainMobile.setErrors({ invalidPhone: true });
+      this.invalidPhoneNumber = true;
+      this.mobileNumberErrorMsg = 'Invalid phone number.';
+      this.registerForm.markAllAsTouched();
+      this.scrollToFirstInvalidField();
+      return;
+    }
+
+    const mainValid = this.validateMobileNumber.isPhoneValid(
+      mainMobile.value,
+      mainCountry.iso2,
+      this.mobileNumberMaxLength
+    );
 
     if (!mainValid) {
       mainMobile.setErrors({ invalidPhone: true });
@@ -379,9 +393,13 @@ export class VaranasiEvents implements OnInit {
     this.accompanyingParticipants.controls.forEach((p) => {
       const mobileCtrl = p.get('mobile_number')!;
       const country: Country = p.get('country_code')!.value;
-      if (mobileCtrl.value && country && !isValidPhoneNumber(String(mobileCtrl.value), country.iso2 as CountryCode)) {
-        mobileCtrl.setErrors({ invalidPhone: true });
-        validParticipants = false;
+
+      if (mobileCtrl.value && country) {
+        const participantMaxLength = this.validateMobileNumber.getPhoneMaxLength(country.iso2);
+        if (!this.validateMobileNumber.isPhoneValid(mobileCtrl.value, country.iso2, participantMaxLength)) {
+          mobileCtrl.setErrors({ invalidPhone: true });
+          validParticipants = false;
+        }
       }
     });
 
@@ -395,20 +413,16 @@ export class VaranasiEvents implements OnInit {
       kcdt_member_id: this.registerForm.value.kcdt_member_id,
       full_name: this.registerForm.value.full_name,
       country_code: mainCountry?.iso2,
-      mobile_number:
-        parsePhoneNumberFromString(String(mainMobile.value), mainCountry.iso2 as CountryCode)?.nationalNumber || mainMobile.value,
+      mobile_number: mainMobile.value,
       gender: this.registerForm.value.gender,
       activities: this.registerForm.value.activities,
+      status: true
     };
 
     const accompData = this.accompanyingParticipants.controls.map((p) => {
       let num = p.value.mobile_number;
       const country: Country = p.get('country_code')!.value;
-      if (num && country) {
-        try {
-          num = parsePhoneNumberFromString(String(num), country.iso2 as CountryCode)?.nationalNumber || num;
-        } catch { }
-      }
+
       return {
         kcdt_member_id: p.value.kcdt_member_id,
         full_name: p.value.full_name,
@@ -416,6 +430,7 @@ export class VaranasiEvents implements OnInit {
         mobile_number: num,
         gender: p.value.gender,
         activities: p.value.activities,
+        status: true
       };
     });
 
@@ -429,10 +444,188 @@ export class VaranasiEvents implements OnInit {
       const data = await resp.json();
       if (!resp.ok || !data.success) throw new Error(data.error || 'Registration failed');
 
+      this.loading = false;
       this.registrationSuccess = true;
-      this.scrollToTop();
+      setTimeout(() => {
+        this.scrollToTop();
+        this.cd.detectChanges();
+      }, 0);
     } catch (err: any) {
       this.submissionError = 'Error saving registration: ' + (err?.message || 'Unknown error');
     }
   }
+
+
+  private handleSearchFormChanges(): void {
+    const mobileCtrl = this.searchForm.get('mobile_number')!;
+
+    // Update validators when country changes
+    this.searchForm.get('country_code')!.valueChanges.subscribe((country: Country | null) => {
+      if (!country) return;
+
+      this.mobileNumberMaxLength = this.validateMobileNumber.getPhoneMaxLength(country.iso2);
+
+      this.validateMobileNumber.applyMobileValidators(
+        mobileCtrl,
+        country.iso2,
+        true,
+        this.mobileNumberMinLength,
+        this.mobileNumberMaxLength
+      );
+
+      mobileCtrl.updateValueAndValidity();
+    });
+
+    // Real-time validation
+    mobileCtrl.valueChanges.subscribe((value) => {
+      const country: Country = this.searchForm.get('country_code')!.value;
+      if (!country || mobileCtrl.pristine) return;
+
+      const valid = this.validateMobileNumber.isPhoneValid(
+        value,
+        country.iso2,
+        this.mobileNumberMaxLength
+      );
+
+      this.invalidSearchNumber = !valid;
+      this.mobileNumberErrorMsg = valid ? '' : 'Invalid phone number.';
+    });
+  }
+
+  async searchRegistration(mobile_number?: string): Promise<void> {
+
+    let mobileNumber = mobile_number;
+    let mobileCtrl;
+    let countryCtrl;
+
+    if (!mobileNumber) {
+      if (!this.searchForm) return;
+
+      mobileCtrl = this.searchForm.get('mobile_number')!;
+      countryCtrl = this.searchForm.get('country_code')!;
+
+      // Validate country
+      if (!countryCtrl.value || !countryCtrl.value.iso2) {
+        mobileCtrl.setErrors({ invalidPhone: true });
+        this.invalidSearchNumber = true;
+        this.mobileNumberErrorMsg = 'Invalid phone number.';
+        this.searchForm.markAllAsTouched();
+        this.scrollToFirstInvalidField();
+        return;
+      }
+
+      // Validate mobile number
+      const valid = this.validateMobileNumber.isPhoneValid(
+        mobileCtrl.value,
+        countryCtrl.value.iso2,
+        this.validateMobileNumber.getPhoneMaxLength(countryCtrl.value.iso2)
+      );
+
+      if (!valid) {
+        mobileCtrl.setErrors({ invalidPhone: true });
+        this.invalidSearchNumber = true;
+        this.mobileNumberErrorMsg = 'Invalid phone number.';
+        this.searchForm.markAllAsTouched();
+        this.scrollToFirstInvalidField();
+        return;
+      }
+
+      this.invalidSearchNumber = false;
+      this.mobileNumberErrorMsg = '';
+      this.loading = true;
+    }
+
+    try {
+
+      const verified = await this.validateRecaptcha.verifyRecaptcha();
+      if (!verified) {
+        this.submissionError = 'reCAPTCHA verification failed';
+        this.loading = false;
+        setTimeout(() => this.cd.detectChanges(), 0);
+        return;
+      }
+
+      const payload = {
+        mobile_number: mobileNumber ? mobileNumber : mobileCtrl?.value,
+        action: null,
+      };
+
+      const resp = await fetch(environment.searchEdgeFunction, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await resp.json();
+
+      if (!resp.ok || !data.success) {
+        throw new Error(data.error || 'Participant not found');
+      }
+
+      // You now have participant data
+      this.mainParticipant = data.mainParticipant
+      this.accompanyingParticipant = data.accompParticipants
+      this.loading = false;
+
+      setTimeout(() => this.cd.detectChanges(), 0);
+
+    } catch (err: any) {
+      this.submissionError = 'Search failed: ' + (err?.message || 'Unknown error');
+    } finally {
+      this.loading = false;
+      setTimeout(() => this.cd.detectChanges(), 0);
+    }
+  }
+
+  /** Withdraw participant */
+  async withdrawRegistration(): Promise<void> {
+    if (!this.searchForm || !this.mainParticipant) return;
+
+    const confirmed = window.confirm(
+      `Withdrawing your participation will also remove all accompanying members. Are you sure you want to continue?`
+    );
+    if (!confirmed) return;
+
+    this.loading = true;
+    setTimeout(() => this.cd.detectChanges(), 0);
+
+    try {
+      // eCAPTCHA verification
+      const verified = await this.validateRecaptcha.verifyRecaptcha();
+      if (!verified) {
+        this.submissionError = 'reCAPTCHA verification failed';
+        this.loading = false;
+        setTimeout(() => this.cd.detectChanges(), 0);
+        return;
+      }
+
+      const payload = {
+        mobile_number: this.mainParticipant.mobile_number,
+        action: "withdraw",
+      };
+
+      const resp = await fetch(environment.searchEdgeFunction, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.error || 'Withdrawal failed');
+
+      this.mainParticipant = data.mainParticipant;
+      this.accompanyingParticipant = data.accompParticipants;
+
+      // Refresh search results after withdrawal
+      await this.searchRegistration(this.mainParticipant?.mobile_number);
+
+      alert('Participant withdrawn successfully!');
+    } catch (err: any) {
+      this.submissionError = 'Withdrawal failed: ' + (err?.message || 'Unknown error');
+    } finally {
+      this.loading = false;
+      setTimeout(() => this.cd.detectChanges(), 0);
+    }
+  }
+
 }

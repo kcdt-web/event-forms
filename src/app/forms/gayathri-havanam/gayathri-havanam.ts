@@ -21,17 +21,13 @@ import { SelectModule } from 'primeng/select';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { PanelModule } from 'primeng/panel';
 import { ButtonModule } from 'primeng/button';
-import { ReCaptchaV3Service } from 'ng-recaptcha';
 import { countries } from 'countries-list';
-import {
-  CountryCode,
-  isValidPhoneNumber,
-  parsePhoneNumberFromString,
-  getExampleNumber,
-} from 'libphonenumber-js';
-import examples from 'libphonenumber-js/mobile/examples';
-import { firstValueFrom } from 'rxjs';
+
 import { environment } from '../../../environments/environment.prod';
+
+
+import { ValidateMobileNumber } from '../../services/validate-mobile-number/validate-mobile-number';
+import { ValidateRecaptcha } from '../../services/validate-recaptcha/validate-recaptcha';
 
 interface Country {
   name: string;
@@ -96,7 +92,8 @@ export class GayathriHavanam implements OnInit {
     private fb: FormBuilder,
     private cd: ChangeDetectorRef,
     private el: ElementRef,
-    private recaptchaV3Service: ReCaptchaV3Service
+    private validateMobileNumber: ValidateMobileNumber,
+    private validateRecaptcha: ValidateRecaptcha
   ) { }
 
   ngOnInit(): void {
@@ -106,7 +103,10 @@ export class GayathriHavanam implements OnInit {
     this.prepareCountries();
 
     const defaultCountry = this.getCountryByIso('IN');
-    this.updatePhoneLength(defaultCountry?.iso2);
+    if (defaultCountry?.iso2) {
+      this.mobileNumberMaxLength =
+        this.validateMobileNumber.getPhoneMaxLength(defaultCountry.iso2);
+    }
 
     this.initializeForm(defaultCountry);
     this.handleFormChanges();
@@ -280,11 +280,12 @@ export class GayathriHavanam implements OnInit {
       ),
     });
 
-    /** Apply dynamic validators */
-    this.setMobileValidators(
+    this.validateMobileNumber.applyMobileValidators(
       this.registerForm.get('mobile_number')!,
       defaultCountry?.iso2,
-      true
+      true,
+      this.mobileNumberMinLength,
+      this.mobileNumberMaxLength
     );
   }
 
@@ -318,34 +319,24 @@ export class GayathriHavanam implements OnInit {
     };
   }
 
-  /** Dynamically assign validators based on country selection */
-  private setMobileValidators(control: AbstractControl, countryIso2?: string, required = false): void {
-    const validators = [
-      ...(required ? [Validators.required] : []),
-      Validators.pattern('^[0-9]*$'),
-      Validators.minLength(this.mobileNumberMinLength),
-      Validators.maxLength(this.mobileNumberMaxLength),
-      this.optionalPhoneValidator(countryIso2),
-    ];
-    control.setValidators(validators);
-  }
-
-  /** Allow empty phone but validate if present */
-  private optionalPhoneValidator(countryIso2?: string) {
-    return (control: AbstractControl) => {
-      if (!control.value) return null;
-      const valid = isValidPhoneNumber(String(control.value), countryIso2 as CountryCode);
-      return valid ? null : { invalidPhone: true };
-    };
-  }
-
   /** Listen to main form changes */
   private handleFormChanges(): void {
     const mobileCtrl = this.registerForm.get('mobile_number')!;
     this.registerForm.get('country_code')!.valueChanges.subscribe((country: Country | null) => {
+
       if (!country) return;
-      this.updatePhoneLength(country.iso2);
-      this.setMobileValidators(mobileCtrl, country.iso2, true);
+
+      this.mobileNumberMaxLength =
+        this.validateMobileNumber.getPhoneMaxLength(country.iso2);
+
+      this.validateMobileNumber.applyMobileValidators(
+        mobileCtrl,
+        country.iso2,
+        true,
+        this.mobileNumberMinLength,
+        this.mobileNumberMaxLength
+      );
+
       mobileCtrl.updateValueAndValidity();
     });
 
@@ -353,8 +344,11 @@ export class GayathriHavanam implements OnInit {
       const country: Country = this.registerForm.get('country_code')!.value;
       if (!country || mobileCtrl.pristine) return;
 
-      const valid = isValidPhoneNumber(String(value), country.iso2 as CountryCode) &&
-        String(value).length === this.mobileNumberMaxLength;
+      const valid = this.validateMobileNumber.isPhoneValid(
+        value,
+        country.iso2,
+        this.mobileNumberMaxLength
+      );
 
       this.invalidPhoneNumber = !valid;
       this.mobileNumberErrorMsg = valid ? '' : 'Invalid phone number.';
@@ -410,18 +404,6 @@ export class GayathriHavanam implements OnInit {
     return slot.registration_count >= slot.max_capacity;
   }
 
-  /** Dynamic phone length from example number */
-  private updatePhoneLength(countryIso2?: string): void {
-    if (!countryIso2) return;
-    try {
-      const example = getExampleNumber(countryIso2 as CountryCode, examples);
-      const length = example?.nationalNumber?.length;
-      this.mobileNumberMaxLength = length || 15;
-    } catch {
-      this.mobileNumberMaxLength = 15;
-    }
-  }
-
   /** Scroll to first invalid input */
   private scrollToFirstInvalidField(): void {
     const firstInvalidControl: HTMLElement | null = this.el.nativeElement.querySelector(
@@ -445,29 +427,14 @@ export class GayathriHavanam implements OnInit {
     this.cd.detectChanges();
 
     try {
-      // 1) Run reCAPTCHA v3
-      const token = await firstValueFrom(this.recaptchaV3Service.execute('submit'));
-      if (!token) throw new Error('reCAPTCHA failed');
+      // const verified = await this.validateRecaptcha.verifyRecaptcha();
+      // if (!verified) {
+      //   this.submissionError = '[EC-TVF] Verification failed';
+      //   this.loading = false;
+      //   this.cd.detectChanges();
+      //   return;
+      // }
 
-      // 2) Verify token on server (Edge Function)
-      const verifyResp = await fetch(
-        'https://blopfvarveykkggbpkfr.supabase.co/functions/v1/recaptcha-verify',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token }),
-        }
-      );
-
-      const verifyData = await verifyResp.json();
-      if (!verifyResp.ok || !verifyData.success) {
-        this.submissionError = '[EC-TVF] Verification failed';
-        this.loading = false;
-        this.cd.detectChanges();
-        return;
-      }
-
-      // 3) Process form submission via Edge Function
       await this.processFormSubmission();
     } catch (err: any) {
       this.submissionError = '[EC-GE] ' + (err?.message || 'Unknown error');
@@ -494,11 +461,20 @@ export class GayathriHavanam implements OnInit {
     const mainMobile = this.registerForm.get('mobile_number')!;
     const mainCountry: Country | null = this.registerForm.get('country_code')!.value;
 
-    const mainValid =
-      mainMobile.value &&
-      mainCountry &&
-      isValidPhoneNumber(String(mainMobile.value), mainCountry.iso2 as CountryCode) &&
-      String(mainMobile.value).length === this.mobileNumberMaxLength;
+    if (!mainCountry || !mainCountry.iso2) {
+      mainMobile.setErrors({ invalidPhone: true });
+      this.invalidPhoneNumber = true;
+      this.mobileNumberErrorMsg = 'Invalid phone number.';
+      this.registerForm.markAllAsTouched();
+      this.scrollToFirstInvalidField();
+      return;
+    }
+
+    const mainValid = this.validateMobileNumber.isPhoneValid(
+      mainMobile.value,
+      mainCountry.iso2,
+      this.mobileNumberMaxLength
+    );
 
     if (!mainValid) {
       mainMobile.setErrors({ invalidPhone: true });
@@ -521,8 +497,7 @@ export class GayathriHavanam implements OnInit {
         kcdt_member_id: this.registerForm.value.kcdt_member_id,
         full_name: this.registerForm.value.full_name,
         country_code: mainCountry?.iso2,
-        mobile_number:
-          parsePhoneNumberFromString(String(mainMobile.value), mainCountry.iso2 as CountryCode)?.nationalNumber || mainMobile.value,
+        mobile_number: mainMobile.value,
       };
       /** Call Edge Function */
       try {
@@ -549,8 +524,7 @@ export class GayathriHavanam implements OnInit {
         kcdt_member_id: this.registerForm.value.kcdt_member_id,
         full_name: this.registerForm.value.full_name,
         country_code: mainCountry?.iso2,
-        mobile_number:
-          Number(parsePhoneNumberFromString(String(mainMobile.value), mainCountry.iso2 as CountryCode)?.nationalNumber || mainMobile.value),
+        mobile_number: mainMobile.value,
         day1: this.registerForm.value.activities.day1,
         day2: this.registerForm.value.activities.day2,
         day3: this.registerForm.value.activities.day3,
@@ -574,8 +548,10 @@ export class GayathriHavanam implements OnInit {
         if (err?.message === "Selected slot(s) are no longer unavailable.") {
           this.submissionError = "Selected slot(s) are no longer unavailable.";
           const activitiesGroup = this.registerForm.get('activities') as FormGroup;
-          ['day1', 'day2', 'day3'].forEach(day => {
-            activitiesGroup.get(day)?.reset([]);
+          activitiesGroup.reset({
+            day1: [],
+            day2: [],
+            day3: []
           });
         } else {
           this.submissionError = 'Error saving registration: ' + (err?.message || 'Unknown error');

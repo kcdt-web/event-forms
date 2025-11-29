@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 
 @Injectable({ providedIn: 'root' })
-export class RegistrationService {
+export class VaranasiEventsRegistrations {
   private functionUrl = 'https://blopfvarveykkggbpkfr.supabase.co/functions/v1/register-participant';
 
   async registerParticipant(mainData: any, accompData: any[]): Promise<any> {
