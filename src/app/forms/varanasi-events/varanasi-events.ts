@@ -616,10 +616,9 @@ export class VaranasiEvents implements OnInit {
       this.mainParticipant = data.mainParticipant;
       this.accompanyingParticipant = data.accompParticipants;
 
-      // Refresh search results after withdrawal
-      await this.searchRegistration(this.mainParticipant?.mobile_number);
+      this.loading = false;
+      setTimeout(() => this.cd.detectChanges(), 0);
 
-      alert('Participant withdrawn successfully!');
     } catch (err: any) {
       this.submissionError = 'Withdrawal failed: ' + (err?.message || 'Unknown error');
     } finally {
