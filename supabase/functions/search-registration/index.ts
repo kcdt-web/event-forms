@@ -115,22 +115,28 @@ serve(async (req) => {
     // Handle withdrawal
     if (action === "withdraw") {
       // Update main participant
+      const withdrawal_date = new Date().toISOString();
       const { error: withdrawError } = await supabase
         .from("varanasi_events_primary_participants")
-        .update({ status: "false" })
+        .update({ status: "false", withdrawal_date: withdrawal_date })
         .eq("id", mainParticipant.id);
       if (withdrawError) throw withdrawError;
       mainParticipant.status = "false";
+      mainParticipant.withdrawal_date = new Date().toISOString();
 
       // Update accompanying participants
       const { error: accompWithdrawError } = await supabase
         .from("varanasi_event_accompanying_participants")
-        .update({ status: "false" })
+        .update({ status: "false", withdrawal_date: withdrawal_date })
         .eq("main_participant_id", mainParticipant.id);
       if (accompWithdrawError) throw accompWithdrawError;
 
       // Reflect updated status locally
-      accompParticipants.forEach((p) => (p.status = "false"));
+      accompParticipants.forEach(p => {
+        p.status = "false";
+        p.withdrawal_date = new Date().toISOString();
+      });
+
     }
 
     return new Response(

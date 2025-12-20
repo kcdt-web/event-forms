@@ -323,16 +323,16 @@ export class VaranasiEvents implements OnInit {
         this.cd.detectChanges()
         return;
       }
-
       await this.processFormSubmission();
     } catch (err: any) {
       this.submissionError = '[EC-GE] ' + (err?.message || 'Unknown error');
-    } finally {
-      this.loading = false;
       setTimeout(() => {
         this.scrollToTop();
         this.cd.detectChanges();
       }, 0);
+    } finally {
+      this.loading = false;
+      this.cd.detectChanges();
     }
   }
 
@@ -494,6 +494,8 @@ export class VaranasiEvents implements OnInit {
 
   async searchRegistration(mobile_number?: string): Promise<void> {
 
+    this.submissionError = '';
+
     let mobileNumber = mobile_number;
     let mobileCtrl;
     let countryCtrl;
@@ -559,6 +561,10 @@ export class VaranasiEvents implements OnInit {
       const data = await resp.json();
 
       if (!resp.ok || !data.success) {
+        setTimeout(() => {
+          this.scrollToTop();
+          this.cd.detectChanges();
+        }, 0);
         throw new Error(data.error || 'Participant not found');
       }
 
@@ -573,12 +579,18 @@ export class VaranasiEvents implements OnInit {
       this.submissionError = 'Search failed: ' + (err?.message || 'Unknown error');
     } finally {
       this.loading = false;
-      this.cd.detectChanges()
+      setTimeout(() => {
+        this.scrollToTop();
+        this.cd.detectChanges();
+      }, 0);
     }
   }
 
   /** Withdraw participant */
   async withdrawRegistration(): Promise<void> {
+
+    this.submissionError = '';
+
     if (!this.searchForm || !this.mainParticipant) return;
 
     const confirmed = window.confirm(
@@ -610,8 +622,12 @@ export class VaranasiEvents implements OnInit {
       });
 
       const data = await resp.json();
-      if (!resp.ok || !data.success) throw new Error(data.error || 'Withdrawal failed');
-
+      if (!resp.ok || !data.success) {
+        setTimeout(() => {
+          this.scrollToTop();
+          this.cd.detectChanges();
+        }, 0); throw new Error(data.error || 'Withdrawal failed')
+      };
 
       this.mainParticipant.status = false;
       this.loading = false;
@@ -621,7 +637,10 @@ export class VaranasiEvents implements OnInit {
       this.submissionError = 'Withdrawal failed: ' + (err?.message || 'Unknown error');
     } finally {
       this.loading = false;
-      this.cd.detectChanges()
+      setTimeout(() => {
+        this.scrollToTop();
+        this.cd.detectChanges();
+      }, 0);
     }
   }
 
