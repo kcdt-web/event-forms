@@ -3,7 +3,8 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ORIGINS = ["https://kcdastrust.org"];
+// const ORIGINS = ["https://kcdastrust.org"];
+const ORIGINS = ["http://localhost:4200"];
 
 // Rate limiting
 const RATE_LIMIT_WINDOW = 60 * 1000; // 60 seconds
@@ -100,7 +101,7 @@ serve(async (req) => {
 
     // 1️⃣ Check if user exists
     const { data: existing } = await supabase
-      .from("registrations")
+      .from("gh_registrations")
       .select("id, day1, day2, day3")
       .eq("mobile_number", mainData.mobile_number)
       .limit(1);
@@ -123,7 +124,7 @@ serve(async (req) => {
       // 2️⃣ Check capacity only for slots being added
       for (const slotId of slotsToAdd) {
         const { data: slot, error: slotErr } = await supabase
-          .from("slots")
+          .from("gh_slots")
           .select("registration_count, max_capacity")
           .eq("id", slotId)
           .single();
@@ -150,7 +151,7 @@ serve(async (req) => {
 
       const { mobile_number, ...updateData } = mainData;
       const { error: updErr } = await supabase
-        .from("registrations")
+        .from("gh_registrations")
         .update(updateData)
         .eq("id", old.id);
       if (updErr) throw updErr;
@@ -159,16 +160,16 @@ serve(async (req) => {
 
       // Update slot counts
       for (const slotId of slotsToRemove)
-        await supabase.rpc("decrement_slot", { slot_id: slotId });
+        await supabase.rpc("gh_decrement_slot", { slot_id: slotId });
       for (const slotId of slotsToAdd)
-        await supabase.rpc("increment_slot", { slot_id: slotId });
+        await supabase.rpc("gh_increment_slot", { slot_id: slotId });
 
     } else {
       // ===== NEW REGISTRATION =====
       // 2️⃣ Check ALL selected slots BEFORE insert
       for (const slotId of newSlots) {
         const { data: slot, error: slotErr } = await supabase
-          .from("slots")
+          .from("gh_slots")
           .select("registration_count, max_capacity")
           .eq("id", slotId)
           .single();
@@ -195,7 +196,7 @@ serve(async (req) => {
 
       // Insert registration now that slots are verified
       const { data: inserted, error: insertErr } = await supabase
-        .from("registrations")
+        .from("gh_registrations")
         .insert([mainData])
         .select()
         .single();
@@ -205,7 +206,7 @@ serve(async (req) => {
 
       // Increment slot counts
       for (const slotId of newSlots)
-        await supabase.rpc("increment_slot", { slot_id: slotId });
+        await supabase.rpc("gh_increment_slot", { slot_id: slotId });
     }
 
     return new Response(JSON.stringify({ success: true, mainId }), {
