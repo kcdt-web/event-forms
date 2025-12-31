@@ -148,7 +148,7 @@
                                             ">
                                         {{item.remaining}} available</div>
                                     } @else {
-                                    @if (item.remaining !== 0) {
+                                    @if (item.remaining > 0) {
                                     <div class="small fw-regular text-muted">{{item.remaining}} available</div>
                                     } @else {
                                     <div class="small fw-regular text-muted">Filled</div>}

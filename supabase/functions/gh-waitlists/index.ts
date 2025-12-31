@@ -86,7 +86,7 @@ serve(async (req) => {
 
     // Check if mobile number already exists
     const { data: existing } = await supabase
-      .from("waitlist")
+      .from("gh_waitlist")
       .select("mobile_number")
       .eq("mobile_number", mobile_number)
       .single();
@@ -99,7 +99,7 @@ serve(async (req) => {
     }
 
     // Insert new waitlist entry
-    const { data, error: insertError } = await supabase.from("waitlist").insert([
+    const { data, error: insertError } = await supabase.from("gh_waitlist").insert([
       { kcdt_member_id, full_name, country_code, mobile_number },
     ]);
 
