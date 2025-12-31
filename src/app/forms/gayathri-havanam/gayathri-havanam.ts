@@ -427,13 +427,13 @@ export class GayathriHavanam implements OnInit {
     this.cd.detectChanges();
 
     try {
-      // const verified = await this.validateRecaptcha.verifyRecaptcha();
-      // if (!verified) {
-      //   this.submissionError = '[EC-TVF] Verification failed';
-      //   this.loading = false;
-      //   this.cd.detectChanges();
-      //   return;
-      // }
+      const verified = await this.validateRecaptcha.verifyRecaptcha();
+      if (!verified) {
+        this.submissionError = '[EC-TVF] Verification failed';
+        this.loading = false;
+        this.cd.detectChanges();
+        return;
+      }
 
       await this.processFormSubmission();
     } catch (err: any) {

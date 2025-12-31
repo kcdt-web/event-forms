@@ -78,16 +78,8 @@ export class VishnuSahasraNamaParayana implements OnInit {
 
   day1Slots: Option[] = [];
   day2Slots: Option[] = [];
-  day3Slots: Option[] = [];
   slots: any[] = [];
   noSlotsAvailable = false;
-
-  private readonly MAX_SLOTS_PER_DAY: any = {
-    day1: 4,
-    day2: 4,
-    day3: 4
-  };
-  private readonly MAX_CONSECUTIVE = 2;
 
   constructor(
     private fb: FormBuilder,
@@ -131,9 +123,8 @@ export class VishnuSahasraNamaParayana implements OnInit {
       // Group by day
       this.day1Slots = this.slots.filter(s => s.day === 1);
       this.day2Slots = this.slots.filter(s => s.day === 2);
-      this.day3Slots = this.slots.filter(s => s.day === 3);
 
-      [...this.day1Slots, ...this.day2Slots, ...this.day3Slots].forEach(s => {
+      [...this.day1Slots, ...this.day2Slots].forEach(s => {
         s.disabled = s.max_capacity === s.registration_count;
       });
 
@@ -144,7 +135,6 @@ export class VishnuSahasraNamaParayana implements OnInit {
       this.noSlotsAvailable = !anyAvailable;
 
       this.updateActivityValidators();
-      this.enforceSlotConstraints();
 
       this.cd.detectChanges();
     }
@@ -163,84 +153,6 @@ export class VishnuSahasraNamaParayana implements OnInit {
   /** Dropdown Options */
   private initializeOptions(): void {
     this.loadSlotsAvailability();
-  }
-
-  private enforceSlotConstraints(): void {
-    const activitiesGroup = this.registerForm.get('activities')!;
-    type DayKey = 'day1' | 'day2' | 'day3';
-    const days: DayKey[] = ['day1', 'day2', 'day3'];
-
-    days.forEach((day) => {
-      const control = activitiesGroup.get(day)!;
-      const selectedIds: number[] = control.value || [];
-
-      const slots: Option[] =
-        day === 'day1' ? this.day1Slots :
-          day === 'day2' ? this.day2Slots :
-            this.day3Slots;
-
-      if (!slots || slots.length === 0) return;
-
-      // 1) reset disabled based on capacity first
-      slots.forEach(s => {
-        s.disabled = s.registration_count >= s.max_capacity;
-      });
-
-      // 2) build selected indexes (sorted)
-      const selectedIdx = selectedIds
-        .map(id => slots.findIndex(s => s.id === id))
-        .filter(i => i >= 0)
-        .sort((a, b) => a - b);
-
-      const markDisabledIfNotSelected = (index: number) => {
-        if (index < 0 || index >= slots.length) return;
-        const id = slots[index].id;
-        if (!selectedIds.includes(id)) {
-          slots[index].disabled = true;
-        }
-      };
-
-      // 3) Disable middle slot when selecting 3 & 5 (index diff == 2)
-      for (let i = 0; i < selectedIdx.length - 1; i++) {
-        const a = selectedIdx[i];
-        const b = selectedIdx[i + 1];
-
-        if (b - a === 2) {
-          markDisabledIfNotSelected(a + 1);
-        }
-      }
-
-      // 4) Disable prev and next-around for consecutive pairs
-      for (let i = 0; i < selectedIdx.length - 1; i++) {
-        const current = selectedIdx[i];
-        const next = selectedIdx[i + 1];
-
-        if (next - current === 1) {
-          markDisabledIfNotSelected(current - 1); // previous
-          markDisabledIfNotSelected(next + 1);    // next after pair
-        }
-      }
-
-      // 5) If 4 slots selected, disable ALL non-selected slots
-      const updatedSelected = control.value || [];
-      if (updatedSelected.length >= 4) {
-        slots.forEach(slot => {
-          if (!updatedSelected.includes(slot.id)) {
-            slot.disabled = true;
-          }
-        });
-      }
-
-      // 6) Remove any selected slot that somehow became disabled
-      const cleanedSelection = selectedIds.filter((id) => {
-        const idx = slots.findIndex(s => s.id === id);
-        return idx >= 0 && !slots[idx].disabled;
-      });
-
-      if (cleanedSelection.length !== selectedIds.length) {
-        control.setValue(cleanedSelection, { emitEvent: false });
-      }
-    });
   }
 
   getSelectedCount(day: 'day1' | 'day2' | 'day3'): number {
@@ -274,8 +186,7 @@ export class VishnuSahasraNamaParayana implements OnInit {
       activities: this.fb.group(
         {
           day1: [[]],
-          day2: [[]],
-          day3: [[]]
+          day2: [[]]
         },
         { validators: [this.atLeastOneDaySelected()] }
       ),
@@ -309,14 +220,10 @@ export class VishnuSahasraNamaParayana implements OnInit {
     return (group: AbstractControl): ValidationErrors | null => {
       const day1 = group.get('day1')?.value || [];
       const day2 = group.get('day2')?.value || [];
-      const day3 = group.get('day3')?.value || [];
 
-      const anySelected =
-        (day1 && day1.length > 0) ||
-        (day2 && day2.length > 0) ||
-        (day3 && day3.length > 0);
-
-      return anySelected ? null : { noDaysSelected: true };
+      return (day1.length || day2.length)
+        ? null
+        : { noDaysSelected: true };
     };
   }
 
@@ -357,52 +264,12 @@ export class VishnuSahasraNamaParayana implements OnInit {
 
     // Listen to each day's selectbutton changes
     const activitiesGroup = this.registerForm.get('activities')!;
-    ['day1', 'day2', 'day3'].forEach(day => {
+    ['day1', 'day2'].forEach(day => {
       activitiesGroup.get(day)?.valueChanges.subscribe(() => {
         activitiesGroup.updateValueAndValidity({ onlySelf: true, emitEvent: false });
-        this.enforceSlotConstraints();
       });
     });
 
-  }
-
-  hasConsecutiveOrDisabledInBetween(day: 'day1' | 'day2' | 'day3'): boolean {
-    const selectedIds: number[] = this.registerForm.get('activities')?.get(day)?.value || [];
-    if (selectedIds.length === 0) return false;
-
-    const slots: Option[] = day === 'day1' ? this.day1Slots
-      : day === 'day2' ? this.day2Slots
-        : this.day3Slots;
-
-    const selectedIndexes = selectedIds
-      .map(id => slots.findIndex(s => s.id === id))
-      .filter(i => i >= 0)
-      .sort((a, b) => a - b);
-
-    // 1) Check for consecutive selection
-    for (let i = 0; i < selectedIndexes.length - 1; i++) {
-      if (selectedIndexes[i + 1] - selectedIndexes[i] === 1) return true;
-    }
-
-    // 2) Check for any disabled slot that is between selected slots
-    for (let i = 0; i < selectedIndexes.length - 1; i++) {
-      const start = selectedIndexes[i];
-      const end = selectedIndexes[i + 1];
-      if (end - start > 1) {
-        // Check slots in between
-        for (let j = start + 1; j < end; j++) {
-          if (slots[j].disabled && !this.isDisabledByCapacity(slots[j])) {
-            return true;
-          }
-        }
-      }
-    }
-
-    return false;
-  }
-
-  private isDisabledByCapacity(slot: Option): boolean {
-    return slot.registration_count >= slot.max_capacity;
   }
 
   /** Scroll to first invalid input */
@@ -428,13 +295,13 @@ export class VishnuSahasraNamaParayana implements OnInit {
     this.cd.detectChanges();
 
     try {
-      // const verified = await this.validateRecaptcha.verifyRecaptcha();
-      // if (!verified) {
-      //   this.submissionError = '[EC-TVF] Verification failed';
-      //   this.loading = false;
-      //   this.cd.detectChanges();
-      //   return;
-      // }
+      const verified = await this.validateRecaptcha.verifyRecaptcha();
+      if (!verified) {
+        this.submissionError = '[EC-TVF] Verification failed';
+        this.loading = false;
+        this.cd.detectChanges();
+        return;
+      }
 
       await this.processFormSubmission();
     } catch (err: any) {
@@ -527,8 +394,7 @@ export class VishnuSahasraNamaParayana implements OnInit {
         country_code: mainCountry?.iso2,
         mobile_number: mainMobile.value,
         day1: this.registerForm.value.activities.day1,
-        day2: this.registerForm.value.activities.day2,
-        day3: this.registerForm.value.activities.day3,
+        day2: this.registerForm.value.activities.day2
       };
       /** Call Edge Function */
       try {

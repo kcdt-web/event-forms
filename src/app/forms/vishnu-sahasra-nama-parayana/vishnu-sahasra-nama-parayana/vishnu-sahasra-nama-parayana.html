@@ -119,7 +119,7 @@
                     <ng-template #header>
                         <div class="d-flex flex-column py-2">
                             <div class="fw-semibold">Day 1 - 14 March 2026</div>
-                            <div class="text-muted small">{{ getSelectedCount('day1') }} of 4 selected</div>
+                            <div class="text-muted small">{{ getSelectedCount('day1') }} selected</div>
                         </div>
                     </ng-template>
                     <div formGroupName="activities">
@@ -149,23 +149,13 @@
                             </ng-template>
                         </p-selectbutton>
                     </div>
-                    <!-- Dynamic Slot Info -->
-                    <div class="text-muted small mt-2">
-                        <ng-container *ngIf="getSelectedCount('day1') < 4 && hasConsecutiveOrDisabledInBetween('day1')">
-                            Some slots are disabled based on your selection pattern.
-                        </ng-container>
-                        <ng-container *ngIf="getSelectedCount('day1') === 4">
-                            You have selected all the allowed slots (4 maximum).
-                        </ng-container>
-                    </div>
-
                 </p-panel>
 
                 <p-panel [toggleable]="true" class="mb-4">
                     <ng-template #header>
                         <div class="d-flex flex-column py-2">
                             <div class="fw-semibold">Day 2 - 15 March 2026</div>
-                            <div class="text-muted small">{{ getSelectedCount('day2') }} of 4 selected</div>
+                            <div class="text-muted small">{{ getSelectedCount('day2') }} selected</div>
                         </div>
                     </ng-template>
                     <div formGroupName="activities">
@@ -194,60 +184,6 @@
                                 </div>
                             </ng-template>
                         </p-selectbutton>
-                    </div>
-                    <!-- Dynamic Slot Info -->
-                    <div class="text-muted small mt-2">
-                        <ng-container *ngIf="getSelectedCount('day2') < 4 && hasConsecutiveOrDisabledInBetween('day2')">
-                            Some slots are disabled based on your selection pattern.
-                        </ng-container>
-                        <ng-container *ngIf="getSelectedCount('day2') === 4">
-                            You have selected all the allowed slots (4 maximum).
-                        </ng-container>
-                    </div>
-                </p-panel>
-
-                <p-panel [toggleable]="true">
-                    <ng-template #header>
-                        <div class="d-flex flex-column py-2">
-                            <div class="fw-semibold">Day 3 - 16 March 2026</div>
-                            <div class="text-muted small">{{ getSelectedCount('day3') }} of 2 selected</div>
-                        </div>
-                    </ng-template>
-                    <div formGroupName="activities">
-                        <p-selectbutton id="activities-day3" [options]="day3Slots" multiple="true"
-                            styleClass="border rounded"
-                            class="d-flex flex-column flex-md-row flex-md-wrap gap-2 activities" formControlName="day3"
-                            optionLabel="slot_time" optionValue="id" optionDisabled="disabled"
-                            [ngClass]="{'p-invalid': registerForm.get('activities')?.errors?.['noDaysSelected'] && (registerForm.get('activities')?.touched || registerForm.get('activities')?.dirty)}">
-                            <ng-template #item let-item>
-                                <div class="d-flex flex-column justify-content-center align-items-center gap-2 w-100">
-                                    <div class="fw-semibold">{{item.slot_time}}</div>
-                                    @if (!item.disabled){
-                                    <div class="small fw-regular" [ngClass]="
-                                            item.disabled ? 'text-muted' :
-                                            item.remaining < 2 ? 'text-danger' :
-                                            item.remaining < 4 ? 'text-warning' :
-                                            'text-success'
-                                            ">
-                                        {{item.remaining}} available</div>
-                                    } @else {
-                                    @if (item.remaining !== 0) {
-                                    <div class="small fw-regular text-muted">{{item.remaining}} available</div>
-                                    } @else {
-                                    <div class="small fw-regular text-muted">Filled</div>}
-                                    }
-                                </div>
-                            </ng-template>
-                        </p-selectbutton>
-                    </div>
-                    <!-- Dynamic Slot Info -->
-                    <div class="text-muted small mt-2">
-                        <ng-container *ngIf="getSelectedCount('day3') < 4 && hasConsecutiveOrDisabledInBetween('day3')">
-                            Some slots are disabled based on your selection pattern.
-                        </ng-container>
-                        <ng-container *ngIf="getSelectedCount('day3') === 4">
-                            You have selected all the allowed slots (4 maximum).
-                        </ng-container>
                     </div>
                 </p-panel>
             </div>
