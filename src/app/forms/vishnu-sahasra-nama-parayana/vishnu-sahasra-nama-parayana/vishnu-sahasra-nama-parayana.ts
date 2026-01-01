@@ -1,34 +1,36 @@
-
 import {
   Component,
   ChangeDetectorRef,
-  OnInit,
   ElementRef,
-  HostListener,
+  OnInit
 } from '@angular/core';
 import {
   FormBuilder,
   FormGroup,
   Validators,
+  FormControl,
   AbstractControl,
-  ValidationErrors,
+  ValidationErrors
 } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+
 import { FloatLabelModule } from 'primeng/floatlabel';
-import { InputTextModule } from 'primeng/inputtext';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { SelectModule } from 'primeng/select';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { PanelModule } from 'primeng/panel';
 import { ButtonModule } from 'primeng/button';
+import { CheckboxModule } from 'primeng/checkbox';
+import { TagModule } from 'primeng/tag';
+
 import { countries } from 'countries-list';
-
 import { environment } from '../../../../environments/environment.prod';
-
 
 import { ValidateMobileNumber } from '../../../services/validate-mobile-number/validate-mobile-number';
 import { ValidateRecaptcha } from '../../../services/validate-recaptcha/validate-recaptcha';
+
+/* ======================= INTERFACES ======================= */
 
 interface Country {
   name: string;
@@ -37,49 +39,79 @@ interface Country {
   displayName: string;
 }
 
-interface Option {
-  id: number,
-  day: number,
-  slot_time: string,
-  max_capacity: number,
-  registration_count: number,
-  remaining?: number
-  disabled?: boolean
+interface Participant {
+  registered_on: string;
+  kcdt_member_id: number | null;
+  full_name: string;
+  activities: string[];
+  status: boolean;
+  mobile_number: string;
 }
+
+interface Option {
+  id: number;
+  day: number;
+  slot_time: string;
+  max_capacity: number;
+  registration_count: number;
+  disabled?: boolean;
+}
+
+/* ======================= COMPONENT ======================= */
 
 @Component({
   selector: 'app-vishnu-sahasra-nama-parayana',
-  imports: [CommonModule,
+  standalone: true,
+  imports: [
+    CommonModule,
     FormsModule,
     ReactiveFormsModule,
     FloatLabelModule,
-    InputTextModule,
     InputNumberModule,
     SelectModule,
     SelectButtonModule,
     PanelModule,
-    ButtonModule],
+    ButtonModule,
+    CheckboxModule,
+    TagModule
+  ],
   templateUrl: './vishnu-sahasra-nama-parayana.html',
   styleUrl: './vishnu-sahasra-nama-parayana.scss',
 })
 export class VishnuSahasraNamaParayana implements OnInit {
-  registerForm!: FormGroup;
-  countriesList: Country[] = [];
-  activityOptions: Option[] = [];
-  invalidPhoneNumber = false;
-  mobileNumberMinLength = 4;
-  mobileNumberMaxLength = 15;
-  mobileNumberErrorMsg = 'Invalid phone number.';
-  loading = false;
-  registrationSuccess = false;
-  submissionError = '';
-  submitted = false;
-  isMobile = false;
 
+  /* ======================= FORMS ======================= */
+  searchForm!: FormGroup;
+  primarySlots!: FormGroup;
+  accompanyingSlots: FormGroup[] = [];
+  applyToAllAccompanying = new FormControl(true);
+
+  /* ======================= DATA ======================= */
+  countriesList: Country[] = [];
   day1Slots: Option[] = [];
   day2Slots: Option[] = [];
-  slots: any[] = [];
-  noSlotsAvailable = false;
+
+  mainParticipant: Participant | null = null;
+  accompanyingParticipant: Participant[] = [];
+
+  /* ======================= UI ======================= */
+  isMobile = false;
+  submissionError = '';
+  registrationSuccess = false;
+  searching = false;
+  saving = false;
+  slotsSubmitted = false;
+
+  yesNoOptions = [
+    { label: 'Yes', value: true },
+    { label: 'No', value: false }
+  ];
+
+  /* ======================= PHONE ======================= */
+  mobileNumberMinLength = 4;
+  mobileNumberMaxLength = 15;
+  mobileNumberErrorMsg = '';
+  invalidSearchNumber = false;
 
   constructor(
     private fb: FormBuilder,
@@ -91,78 +123,22 @@ export class VishnuSahasraNamaParayana implements OnInit {
 
   ngOnInit(): void {
     this.isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-    this.initializeOptions();
     this.prepareCountries();
-
-    const defaultCountry = this.getCountryByIso('IN');
-    if (defaultCountry?.iso2) {
-      this.mobileNumberMaxLength =
-        this.validateMobileNumber.getPhoneMaxLength(defaultCountry.iso2);
-    }
-
-    this.initializeForm(defaultCountry);
-    this.handleFormChanges();
-
-  }
-
-  /** Prevent accidental page exit */
-  private hasUnsavedData(): boolean {
-    if (!this.registerForm) return false;
-    return this.registerForm.dirty && !this.registrationSuccess;
-  }
-
-  async loadSlotsAvailability() {
-    const response = await fetch(environment.vsnpSlotsEdgeFunction);
-    const result = await response.json();
-
-    if (result.success) {
-      // Keep slots exactly as received from DB
-      this.slots = result.slots;
-
-      // Group by day
-      this.day1Slots = this.slots.filter(s => s.day === 1);
-      this.day2Slots = this.slots.filter(s => s.day === 2);
-
-      [...this.day1Slots, ...this.day2Slots].forEach(s => {
-        s.disabled = s.max_capacity === s.registration_count;
-      });
-
-      const anyAvailable = this.slots.some(
-        s => s.registration_count < s.max_capacity
-      );
-
-      this.noSlotsAvailable = !anyAvailable;
-
-      this.updateActivityValidators();
-
-      this.cd.detectChanges();
-    }
-  }
-
-  @HostListener('window:beforeunload', ['$event'])
-  handleBeforeUnload(event: BeforeUnloadEvent): string | undefined {
-    if (this.hasUnsavedData()) {
-      event.preventDefault();
-      event.returnValue = '';
-      return '';
-    }
-    return undefined;
-  }
-
-  /** Dropdown Options */
-  private initializeOptions(): void {
+    this.initializeSearchForm();
+    this.handleSearchFormChanges();
     this.loadSlotsAvailability();
   }
 
-  getSelectedCount(day: 'day1' | 'day2' | 'day3'): number {
-    const activities = this.registerForm.get('activities')?.value;
-    if (!activities) return 0;
-    return (activities[day] || []).length;
+  /* ======================= VALIDATORS ======================= */
+
+  private atLeastOneSlotValidator(control: AbstractControl): ValidationErrors | null {
+    const day1 = control.get('day1')?.value || [];
+    const day2 = control.get('day2')?.value || [];
+    return (day1.length || day2.length) ? null : { noDaysSelected: true };
   }
 
+  /* ======================= COUNTRIES ======================= */
 
-  /** Build Country List */
   private prepareCountries(): void {
     this.countriesList = Object.entries(countries).map(([iso2, data]) => ({
       name: data.name,
@@ -173,65 +149,29 @@ export class VishnuSahasraNamaParayana implements OnInit {
   }
 
   private getCountryByIso(iso2: string): Country | undefined {
-    return this.countriesList.find((c) => c.iso2 === iso2);
+    return this.countriesList.find(c => c.iso2 === iso2);
   }
 
-  /** Main Form Init */
-  private initializeForm(defaultCountry?: Country): void {
-    this.registerForm = this.fb.group({
-      kcdt_member_id: [null, Validators.required],
-      full_name: [null, Validators.required],
+  /* ======================= SEARCH FORM ======================= */
+
+  private initializeSearchForm(): void {
+    const defaultCountry = this.getCountryByIso('IN');
+
+    this.searchForm = this.fb.group({
       country_code: [defaultCountry || null, Validators.required],
-      mobile_number: [null],
-      activities: this.fb.group(
-        {
-          day1: [[]],
-          day2: [[]]
-        },
-        { validators: [this.atLeastOneDaySelected()] }
-      ),
+      mobile_number: [null, Validators.required],
     });
 
-    this.validateMobileNumber.applyMobileValidators(
-      this.registerForm.get('mobile_number')!,
-      defaultCountry?.iso2,
-      true,
-      this.mobileNumberMinLength,
-      this.mobileNumberMaxLength
-    );
-  }
-
-  private updateActivityValidators(): void {
-    const activities = this.registerForm.get('activities') as FormGroup;
-
-    if (!activities) return;
-
-    if (this.noSlotsAvailable) {
-      activities.clearValidators();
-    } else {
-      activities.setValidators([this.atLeastOneDaySelected()]);
+    if (defaultCountry) {
+      this.mobileNumberMaxLength =
+        this.validateMobileNumber.getPhoneMaxLength(defaultCountry.iso2);
     }
-
-    activities.updateValueAndValidity({ emitEvent: false });
   }
 
-  /** Activities min selected */
-  private atLeastOneDaySelected() {
-    return (group: AbstractControl): ValidationErrors | null => {
-      const day1 = group.get('day1')?.value || [];
-      const day2 = group.get('day2')?.value || [];
+  private handleSearchFormChanges(): void {
+    const mobileCtrl = this.searchForm.get('mobile_number')!;
 
-      return (day1.length || day2.length)
-        ? null
-        : { noDaysSelected: true };
-    };
-  }
-
-  /** Listen to main form changes */
-  private handleFormChanges(): void {
-    const mobileCtrl = this.registerForm.get('mobile_number')!;
-    this.registerForm.get('country_code')!.valueChanges.subscribe((country: Country | null) => {
-
+    this.searchForm.get('country_code')!.valueChanges.subscribe((country: Country) => {
       if (!country) return;
 
       this.mobileNumberMaxLength =
@@ -244,12 +184,10 @@ export class VishnuSahasraNamaParayana implements OnInit {
         this.mobileNumberMinLength,
         this.mobileNumberMaxLength
       );
-
-      mobileCtrl.updateValueAndValidity();
     });
 
-    mobileCtrl.valueChanges.subscribe((value) => {
-      const country: Country = this.registerForm.get('country_code')!.value;
+    mobileCtrl.valueChanges.subscribe(value => {
+      const country = this.searchForm.get('country_code')!.value;
       if (!country || mobileCtrl.pristine) return;
 
       const valid = this.validateMobileNumber.isPhoneValid(
@@ -258,174 +196,201 @@ export class VishnuSahasraNamaParayana implements OnInit {
         this.mobileNumberMaxLength
       );
 
-      this.invalidPhoneNumber = !valid;
-      this.mobileNumberErrorMsg = valid ? '' : 'Invalid phone number.';
+      this.invalidSearchNumber = !valid;
+      this.mobileNumberErrorMsg = valid ? '' : 'Invalid mobile number';
     });
-
-    // Listen to each day's selectbutton changes
-    const activitiesGroup = this.registerForm.get('activities')!;
-    ['day1', 'day2'].forEach(day => {
-      activitiesGroup.get(day)?.valueChanges.subscribe(() => {
-        activitiesGroup.updateValueAndValidity({ onlySelf: true, emitEvent: false });
-      });
-    });
-
   }
 
-  /** Scroll to first invalid input */
-  private scrollToFirstInvalidField(): void {
-    const firstInvalidControl: HTMLElement | null = this.el.nativeElement.querySelector(
-      'form .ng-invalid.p-component'
-    );
-    if (firstInvalidControl) {
-      const innerInput = firstInvalidControl.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
-        'input, textarea, select'
-      );
-      const focusableElement: HTMLElement = innerInput || firstInvalidControl;
-      focusableElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      if ('focus' in focusableElement) (focusableElement as HTMLElement).focus({ preventScroll: true });
-    }
+  /* ======================= SLOTS ======================= */
+
+  async loadSlotsAvailability(): Promise<void> {
+    const resp = await fetch(environment.vsnpSlotsEdgeFunction);
+    const data = await resp.json();
+
+    const slots: Option[] = data.slots;
+
+    this.day1Slots = slots
+      .filter(s => s.day === 1)
+      .map(s => ({ ...s, disabled: s.max_capacity === s.registration_count }));
+
+    this.day2Slots = slots
+      .filter(s => s.day === 2)
+      .map(s => ({ ...s, disabled: s.max_capacity === s.registration_count }));
   }
 
-  /** Submit Form */
-  async onSubmit(): Promise<void> {
-    this.submitted = true;
-    this.loading = true;
+  /* ======================= SEARCH ======================= */
+
+  async searchRegistration(): Promise<void> {
+    if (this.searching) return;
+
     this.submissionError = '';
-    this.cd.detectChanges();
+    this.invalidSearchNumber = false;
+    this.searchForm.markAllAsTouched();
+
+    if (this.searchForm.invalid) return;
+
+    const mobileCtrl = this.searchForm.get('mobile_number')!;
+    const country = this.searchForm.get('country_code')!.value;
+
+    if (!this.validateMobileNumber.isPhoneValid(
+      mobileCtrl.value,
+      country.iso2,
+      this.mobileNumberMaxLength
+    )) {
+      this.invalidSearchNumber = true;
+      this.mobileNumberErrorMsg = 'Invalid phone number.';
+      return;
+    }
+
+    this.searching = true;
 
     try {
-      const verified = await this.validateRecaptcha.verifyRecaptcha();
-      if (!verified) {
-        this.submissionError = '[EC-TVF] Verification failed';
-        this.loading = false;
-        this.cd.detectChanges();
-        return;
+      const resp = await fetch(environment.searchEdgeFunction, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mobile_number: mobileCtrl.value }),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok || !data.success) {
+        throw new Error(data.error || 'Participant not found');
       }
 
-      await this.processFormSubmission();
+      this.mainParticipant = data.mainParticipant;
+      this.accompanyingParticipant = data.accompParticipants;
+
+      this.initParticipantSlots();
     } catch (err: any) {
-      this.submissionError = '[EC-GE] ' + (err?.message || 'Unknown error');
+      this.submissionError = err.message || 'Search failed';
     } finally {
-      this.loading = false;
+      this.searching = false;
       this.cd.detectChanges();
     }
   }
 
-  resetForm(): void {
-    const defaultCountry = this.getCountryByIso('IN');
-    this.initializeForm(defaultCountry);
-    this.registrationSuccess = false;
-    this.submissionError = '';
-    this.submitted = false;
-  }
+  /* ======================= SLOT FORMS ======================= */
 
-  private scrollToTop(): void {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
+  private initParticipantSlots(): void {
+    this.primarySlots = this.fb.group({
+      activities: this.fb.group(
+        { day1: [[]], day2: [[]] },
+        { validators: this.atLeastOneSlotValidator }
+      ),
+    });
 
-  /** NEW: Process submission via Edge Function */
-  private async processFormSubmission(): Promise<void> {
-    const mainMobile = this.registerForm.get('mobile_number')!;
-    const mainCountry: Country | null = this.registerForm.get('country_code')!.value;
-
-    if (!mainCountry || !mainCountry.iso2) {
-      mainMobile.setErrors({ invalidPhone: true });
-      this.invalidPhoneNumber = true;
-      this.mobileNumberErrorMsg = 'Invalid phone number.';
-      this.registerForm.markAllAsTouched();
-      this.scrollToFirstInvalidField();
-      return;
-    }
-
-    const mainValid = this.validateMobileNumber.isPhoneValid(
-      mainMobile.value,
-      mainCountry.iso2,
-      this.mobileNumberMaxLength
+    this.accompanyingSlots = this.accompanyingParticipant.map(() =>
+      this.fb.group({
+        copyFromPrimary: [true],
+        activities: this.fb.group(
+          { day1: [[]], day2: [[]] },
+          { validators: this.atLeastOneSlotValidator }
+        ),
+      })
     );
 
-    if (!mainValid) {
-      mainMobile.setErrors({ invalidPhone: true });
-      this.invalidPhoneNumber = true;
-      this.mobileNumberErrorMsg = 'Invalid phone number.';
-      this.registerForm.markAllAsTouched();
-      this.scrollToFirstInvalidField();
-      return;
-    }
-
-    if (this.registerForm.invalid) {
-      this.registerForm.markAllAsTouched();
-      this.scrollToFirstInvalidField();
-      return;
-    }
-
-    if (this.noSlotsAvailable) {
-      /** Prepare payload */
-      const mainData = {
-        kcdt_member_id: this.registerForm.value.kcdt_member_id,
-        full_name: this.registerForm.value.full_name,
-        country_code: mainCountry?.iso2,
-        mobile_number: mainMobile.value,
-      };
-      /** Call Edge Function */
-      try {
-        const resp = await fetch(environment.gayathriHavanamWaitlists, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mainData }),
-        });
-        const data = await resp.json();
-        if (!resp.ok || !data.success) {
-          const errorMsg = data.message || data.error || 'Registration failed';
-          throw new Error(errorMsg);
-        }
-
-        this.registrationSuccess = true;
-        this.scrollToTop();
-      } catch (err: any) {
-        this.scrollToTop();
-        this.submissionError = 'Error joining waitlist. ' + (err?.message || 'Unknown error');
+    /* 🔹 APPLY TO ALL TOGGLE */
+    this.applyToAllAccompanying.valueChanges.subscribe(val => {
+      if (val === false) {
+        this.clearAllAccompanyingSlots();
+      } else {
+        this.accompanyingSlots.forEach(g =>
+          g.get('copyFromPrimary')!.setValue(true, { emitEvent: true })
+        );
       }
-    } else {
-      /** Prepare payload */
-      const mainData = {
-        kcdt_member_id: this.registerForm.value.kcdt_member_id,
-        full_name: this.registerForm.value.full_name,
-        country_code: mainCountry?.iso2,
-        mobile_number: mainMobile.value,
-        day1: this.registerForm.value.activities.day1,
-        day2: this.registerForm.value.activities.day2
-      };
-      /** Call Edge Function */
-      try {
-        const resp = await fetch(environment.gayathriHavanamRegistrationEdgeFunction, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mainData }),
-        });
-        const data = await resp.json();
-        if (!resp.ok || !data.success) {
-          const errorMsg = data.message || data.error || 'Registration failed';
-          throw new Error(errorMsg);
-        }
+    });
 
-        this.registrationSuccess = true;
-        this.scrollToTop();
-      } catch (err: any) {
-        if (err?.message === "Selected slot(s) are no longer unavailable.") {
-          this.submissionError = "Selected slot(s) are no longer unavailable.";
-          const activitiesGroup = this.registerForm.get('activities') as FormGroup;
-          activitiesGroup.reset({
-            day1: [],
-            day2: [],
-            day3: []
-          });
+    /* 🔹 PER PARTICIPANT COPY */
+    this.accompanyingSlots.forEach(grp => {
+      grp.get('copyFromPrimary')!.valueChanges.subscribe(copy => {
+        const activities = grp.get('activities')!;
+        if (copy) {
+          activities.patchValue(this.primarySlots.get('activities')!.value, { emitEvent: false });
+          activities.disable({ emitEvent: false });
         } else {
-          this.submissionError = 'Error saving registration: ' + (err?.message || 'Unknown error');
+          activities.enable({ emitEvent: false });
         }
-        this.scrollToTop();
-        this.loadSlotsAvailability();
-      }
+      });
+    });
+
+    /* 🔹 SYNC PRIMARY → ACCOMPANYING */
+    this.primarySlots.get('activities')!.valueChanges.subscribe(value => {
+      this.accompanyingSlots.forEach(grp => {
+        if (grp.get('copyFromPrimary')!.value) {
+          grp.get('activities')!.patchValue(value, { emitEvent: false });
+        }
+      });
+    });
+  }
+
+  /* ✅ NEW: CLEAR ACCOMPANYING WHEN APPLY = NO */
+  private clearAllAccompanyingSlots(): void {
+    this.accompanyingSlots.forEach(form => {
+      form.get('copyFromPrimary')?.setValue(false, { emitEvent: false });
+      form.get('activities.day1')?.setValue([], { emitEvent: false });
+      form.get('activities.day2')?.setValue([], { emitEvent: false });
+
+      form.markAsPristine();
+      form.markAsUntouched();
+      form.updateValueAndValidity({ emitEvent: false });
+    });
+  }
+
+  /* ======================= SUBMIT ======================= */
+
+  submitSlots(): void {
+    if (this.saving) return;
+
+    this.slotsSubmitted = true;
+    this.saving = true;
+    this.submissionError = '';
+
+    this.primarySlots.markAllAsTouched();
+    this.accompanyingSlots.forEach(g => g.markAllAsTouched());
+
+    if (!this.primarySlots.valid) {
+      this.saving = false;
+      return;
     }
+
+    try {
+      const payload: any[] = [];
+
+      const primaryActivities = this.primarySlots.getRawValue().activities;
+
+      payload.push({
+        id: this.mainParticipant?.kcdt_member_id ?? null,
+        full_name: this.mainParticipant?.full_name,
+        day1: primaryActivities.day1,
+        day2: primaryActivities.day2,
+      });
+
+      this.accompanyingParticipant.forEach((p, i) => {
+        const activities = this.accompanyingSlots[i].getRawValue().activities;
+        payload.push({
+          id: p.kcdt_member_id ?? null,
+          full_name: p.full_name,
+          day1: activities.day1,
+          day2: activities.day2,
+        });
+      });
+
+      console.log('Final payload:', payload);
+    } catch (err: any) {
+      this.submissionError = err.message || 'Failed to save slots';
+    } finally {
+      this.saving = false;
+      this.cd.detectChanges();
+    }
+  }
+
+  hasSlotError(form: FormGroup): boolean {
+    const activities = form.get('activities');
+    return this.slotsSubmitted && !!activities && activities.hasError('noDaysSelected');
+  }
+
+  resetForm(): void {
+    this.mainParticipant = null;
+    this.accompanyingParticipant = [];
+    this.initializeSearchForm();
   }
 }
