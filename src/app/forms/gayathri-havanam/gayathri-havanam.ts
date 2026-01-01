@@ -68,7 +68,7 @@ export class GayathriHavanam implements OnInit {
   invalidPhoneNumber = false;
   mobileNumberMinLength = 4;
   mobileNumberMaxLength = 15;
-  mobileNumberErrorMsg = 'Invalid phone number.';
+  mobileNumberErrorMsg = 'Invalid mobile number.';
   loading = false;
   registrationSuccess = false;
   submissionError = '';
@@ -351,7 +351,7 @@ export class GayathriHavanam implements OnInit {
       );
 
       this.invalidPhoneNumber = !valid;
-      this.mobileNumberErrorMsg = valid ? '' : 'Invalid phone number.';
+      this.mobileNumberErrorMsg = valid ? '' : 'Invalid mobile number.';
     });
 
     // Listen to each day's selectbutton changes
@@ -464,7 +464,7 @@ export class GayathriHavanam implements OnInit {
     if (!mainCountry || !mainCountry.iso2) {
       mainMobile.setErrors({ invalidPhone: true });
       this.invalidPhoneNumber = true;
-      this.mobileNumberErrorMsg = 'Invalid phone number.';
+      this.mobileNumberErrorMsg = 'Invalid mobile number.';
       this.registerForm.markAllAsTouched();
       this.scrollToFirstInvalidField();
       return;
@@ -479,7 +479,7 @@ export class GayathriHavanam implements OnInit {
     if (!mainValid) {
       mainMobile.setErrors({ invalidPhone: true });
       this.invalidPhoneNumber = true;
-      this.mobileNumberErrorMsg = 'Invalid phone number.';
+      this.mobileNumberErrorMsg = 'Invalid mobile number.';
       this.registerForm.markAllAsTouched();
       this.scrollToFirstInvalidField();
       return;

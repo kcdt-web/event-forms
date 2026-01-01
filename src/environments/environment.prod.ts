@@ -15,4 +15,5 @@ export const environment = {
     gayathriHavanamWaitlists: "https://blopfvarveykkggbpkfr.supabase.co/functions/v1/gh-waitlists",
 
     vsnpSlotsEdgeFunction: "https://blopfvarveykkggbpkfr.supabase.co/functions/v1/get-vsnp-available-slots",
+    vsnpRegistrationsEdgeFunction: "https://blopfvarveykkggbpkfr.supabase.co/functions/v1/vsnp-registration"
 };

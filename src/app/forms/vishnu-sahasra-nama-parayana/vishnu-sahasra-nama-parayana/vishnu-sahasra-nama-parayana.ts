@@ -40,11 +40,13 @@ interface Country {
 }
 
 interface Participant {
+  id: number;
   registered_on: string;
   kcdt_member_id: number | null;
   full_name: string;
   activities: string[];
   status: boolean;
+  country_code: string;
   mobile_number: string;
 }
 
@@ -90,17 +92,18 @@ export class VishnuSahasraNamaParayana implements OnInit {
   countriesList: Country[] = [];
   day1Slots: Option[] = [];
   day2Slots: Option[] = [];
+  noSlotsAvailable: boolean = false;
 
   mainParticipant: Participant | null = null;
   accompanyingParticipant: Participant[] = [];
 
   /* ======================= UI ======================= */
-  isMobile = false;
   submissionError = '';
   registrationSuccess = false;
   searching = false;
   saving = false;
   slotsSubmitted = false;
+  isMobile = false;
 
   yesNoOptions = [
     { label: 'Yes', value: true },
@@ -123,10 +126,29 @@ export class VishnuSahasraNamaParayana implements OnInit {
 
   ngOnInit(): void {
     this.isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
     this.prepareCountries();
     this.initializeSearchForm();
     this.handleSearchFormChanges();
     this.loadSlotsAvailability();
+  }
+
+  /* ======================= CAPTCHA ======================= */
+
+  private async runCaptcha(): Promise<boolean> {
+    try {
+      const verified = await this.validateRecaptcha.verifyRecaptcha();
+      if (!verified) {
+        this.submissionError = '[EC-TVF] Verification failed';
+        this.cd.detectChanges();
+        return false;
+      }
+      return true;
+    } catch (err: any) {
+      this.submissionError = '[EC-GE] ' + (err?.message || 'Captcha error');
+      this.cd.detectChanges();
+      return false;
+    }
   }
 
   /* ======================= VALIDATORS ======================= */
@@ -209,13 +231,14 @@ export class VishnuSahasraNamaParayana implements OnInit {
 
     const slots: Option[] = data.slots;
 
-    this.day1Slots = slots
-      .filter(s => s.day === 1)
+    this.day1Slots = slots.filter(s => s.day === 1)
       .map(s => ({ ...s, disabled: s.max_capacity === s.registration_count }));
 
-    this.day2Slots = slots
-      .filter(s => s.day === 2)
+    this.day2Slots = slots.filter(s => s.day === 2)
       .map(s => ({ ...s, disabled: s.max_capacity === s.registration_count }));
+
+    this.noSlotsAvailable =
+      [...this.day1Slots, ...this.day2Slots].every(s => s.disabled === true);
   }
 
   /* ======================= SEARCH ======================= */
@@ -238,11 +261,17 @@ export class VishnuSahasraNamaParayana implements OnInit {
       this.mobileNumberMaxLength
     )) {
       this.invalidSearchNumber = true;
-      this.mobileNumberErrorMsg = 'Invalid phone number.';
+      this.mobileNumberErrorMsg = 'Invalid mobile number.';
       return;
     }
 
     this.searching = true;
+    this.cd.detectChanges();
+
+    // if (!(await this.runCaptcha())) {
+    //   this.searching = false;
+    //   return;
+    // }
 
     try {
       const resp = await fetch(environment.searchEdgeFunction, {
@@ -253,13 +282,13 @@ export class VishnuSahasraNamaParayana implements OnInit {
 
       const data = await resp.json();
       if (!resp.ok || !data.success) {
-        throw new Error(data.error || 'Participant not found');
+        throw new Error(data.message || 'Participant not found');
       }
 
       this.mainParticipant = data.mainParticipant;
       this.accompanyingParticipant = data.accompParticipants;
-
       this.initParticipantSlots();
+
     } catch (err: any) {
       this.submissionError = err.message || 'Search failed';
     } finally {
@@ -280,7 +309,6 @@ export class VishnuSahasraNamaParayana implements OnInit {
 
     this.accompanyingSlots = this.accompanyingParticipant.map(() =>
       this.fb.group({
-        copyFromPrimary: [true],
         activities: this.fb.group(
           { day1: [[]], day2: [[]] },
           { validators: this.atLeastOneSlotValidator }
@@ -288,93 +316,118 @@ export class VishnuSahasraNamaParayana implements OnInit {
       })
     );
 
-    /* 🔹 APPLY TO ALL TOGGLE */
-    this.applyToAllAccompanying.valueChanges.subscribe(val => {
-      if (val === false) {
-        this.clearAllAccompanyingSlots();
+    // Sync primary → accompanying when "Apply to all" is YES
+    this.primarySlots.get('activities')!.valueChanges.subscribe(value => {
+      if (!this.applyToAllAccompanying.value) return;
+
+      this.accompanyingSlots.forEach(g => {
+        g.get('activities')!.patchValue(value, { emitEvent: false });
+      });
+    });
+
+    this.applyToAllAccompanying.valueChanges.subscribe(applyAll => {
+      if (applyAll) {
+        // YES → copy primary slots to all
+        const primary = this.primarySlots.get('activities')!.value;
+        this.accompanyingSlots.forEach(g => {
+          g.get('activities')!.patchValue(primary, { emitEvent: false });
+        });
       } else {
-        this.accompanyingSlots.forEach(g =>
-          g.get('copyFromPrimary')!.setValue(true, { emitEvent: true })
-        );
+        // NO → clear accompanying slots for manual selection
+        this.accompanyingSlots.forEach(g => {
+          g.get('activities')!.reset(
+            { day1: [], day2: [] },
+            { emitEvent: false }
+          );
+        });
       }
     });
 
-    /* 🔹 PER PARTICIPANT COPY */
-    this.accompanyingSlots.forEach(grp => {
-      grp.get('copyFromPrimary')!.valueChanges.subscribe(copy => {
-        const activities = grp.get('activities')!;
-        if (copy) {
-          activities.patchValue(this.primarySlots.get('activities')!.value, { emitEvent: false });
-          activities.disable({ emitEvent: false });
-        } else {
-          activities.enable({ emitEvent: false });
-        }
-      });
-    });
-
-    /* 🔹 SYNC PRIMARY → ACCOMPANYING */
-    this.primarySlots.get('activities')!.valueChanges.subscribe(value => {
-      this.accompanyingSlots.forEach(grp => {
-        if (grp.get('copyFromPrimary')!.value) {
-          grp.get('activities')!.patchValue(value, { emitEvent: false });
-        }
-      });
-    });
-  }
-
-  /* ✅ NEW: CLEAR ACCOMPANYING WHEN APPLY = NO */
-  private clearAllAccompanyingSlots(): void {
-    this.accompanyingSlots.forEach(form => {
-      form.get('copyFromPrimary')?.setValue(false, { emitEvent: false });
-      form.get('activities.day1')?.setValue([], { emitEvent: false });
-      form.get('activities.day2')?.setValue([], { emitEvent: false });
-
-      form.markAsPristine();
-      form.markAsUntouched();
-      form.updateValueAndValidity({ emitEvent: false });
-    });
   }
 
   /* ======================= SUBMIT ======================= */
 
-  submitSlots(): void {
+  async submitSlots(): Promise<void> {
     if (this.saving) return;
 
     this.slotsSubmitted = true;
     this.saving = true;
     this.submissionError = '';
-
     this.primarySlots.markAllAsTouched();
-    this.accompanyingSlots.forEach(g => g.markAllAsTouched());
 
-    if (!this.primarySlots.valid) {
+    if (!this.applyToAllAccompanying.value) {
+      this.accompanyingSlots.forEach(g => g.markAllAsTouched());
+    }
+
+    const primaryInvalid = this.primarySlots.invalid;
+
+    const accompanyingInvalid =
+      !this.applyToAllAccompanying.value &&
+      this.accompanyingSlots.some(g => g.invalid);
+
+    if (primaryInvalid || accompanyingInvalid) {
       this.saving = false;
+      this.cd.detectChanges();
       return;
+    }
+
+    this.cd.detectChanges();
+
+    // if (!(await this.runCaptcha())) {
+    //   this.saving = false;
+    //   return;
+    // }
+
+    if (this.applyToAllAccompanying.value) {
+      const primary = this.primarySlots.getRawValue().activities;
+      this.accompanyingSlots.forEach(g => {
+        g.get('activities')!.setValue(primary, { emitEvent: false });
+      });
     }
 
     try {
       const payload: any[] = [];
-
-      const primaryActivities = this.primarySlots.getRawValue().activities;
-
+      const primary = this.primarySlots.getRawValue().activities;
       payload.push({
-        id: this.mainParticipant?.kcdt_member_id ?? null,
+        kcdt_member_id: this.mainParticipant?.kcdt_member_id,
+        source_reference: this.mainParticipant?.id,
         full_name: this.mainParticipant?.full_name,
-        day1: primaryActivities.day1,
-        day2: primaryActivities.day2,
+        country_code: this.mainParticipant?.country_code,
+        mobile_number: this.mainParticipant?.mobile_number,
+        day1: primary.day1,
+        day2: primary.day2
       });
 
       this.accompanyingParticipant.forEach((p, i) => {
-        const activities = this.accompanyingSlots[i].getRawValue().activities;
+        const a = this.accompanyingSlots[i].getRawValue().activities;
         payload.push({
-          id: p.kcdt_member_id ?? null,
-          full_name: p.full_name,
-          day1: activities.day1,
-          day2: activities.day2,
+          kcdt_member_id: p?.kcdt_member_id,
+          source_reference: p?.id,
+          full_name: p?.full_name,
+          country_code: p?.country_code,
+          mobile_number: p?.mobile_number,
+          day1: a.day1,
+          day2: a.day2
         });
       });
 
-      console.log('Final payload:', payload);
+      console.log(JSON.stringify({ mainData: payload }))
+
+      const resp = await fetch(environment.vsnpRegistrationsEdgeFunction, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mainData: payload }),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok || !data.success) {
+        const errorMsg = data.message || data.error || 'Slot saving failed';
+        throw new Error(errorMsg);
+      }
+
+      this.registrationSuccess = true;
+      this.scrollToTop();
+
     } catch (err: any) {
       this.submissionError = err.message || 'Failed to save slots';
     } finally {
@@ -383,14 +436,45 @@ export class VishnuSahasraNamaParayana implements OnInit {
     }
   }
 
-  hasSlotError(form: FormGroup): boolean {
-    const activities = form.get('activities');
-    return this.slotsSubmitted && !!activities && activities.hasError('noDaysSelected');
+  private scrollToTop(): void {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+
+  hasSlotError(form: FormGroup): boolean {
+    return (
+      this.slotsSubmitted === true &&
+      form.get('activities')?.hasError('noDaysSelected') === true
+    );
+  }
+
+  /* ======================= RESET ======================= */
+
   resetForm(): void {
+    // Clear participants
     this.mainParticipant = null;
     this.accompanyingParticipant = [];
-    this.initializeSearchForm();
+
+    // Clear slot forms + validation state
+    this.primarySlots = undefined as any;
+    this.accompanyingSlots = [];
+    this.slotsSubmitted = false;
+
+    // Clear UI state
+    this.registrationSuccess = false;
+    this.submissionError = '';
+
+    // Reset search form but keep country default
+    const defaultCountry = this.getCountryByIso('IN');
+    this.searchForm.reset({
+      country_code: defaultCountry || null,
+      mobile_number: null,
+    });
+
+    this.invalidSearchNumber = false;
+    this.mobileNumberErrorMsg = '';
+
+    this.cd.detectChanges();
   }
+
 }

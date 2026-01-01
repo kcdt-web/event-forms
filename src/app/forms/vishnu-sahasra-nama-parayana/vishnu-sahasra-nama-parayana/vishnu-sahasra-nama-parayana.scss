@@ -1,0 +1,11 @@
+:host ::ng-deep {
+    .accompanying-slots.copy-mode {
+        opacity: 0.6;
+        pointer-events: none;
+    }
+    .accompanying-slots.copy-mode .p-selectbutton .p-button.p-highlight {
+        opacity: 1;
+        background: var(--primary-color);
+        color: #fff;
+    }
+}
