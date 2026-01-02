@@ -350,7 +350,7 @@ export class VaranasiEvents implements OnInit {
   }
 
   private scrollToTop(): void {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo(0, 0);
   }
 
   /** NEW: Process submission via Edge Function */
