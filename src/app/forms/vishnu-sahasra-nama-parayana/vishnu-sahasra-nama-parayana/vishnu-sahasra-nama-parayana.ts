@@ -299,6 +299,7 @@ export class VishnuSahasraNamaParayana implements OnInit {
 
     } catch (err: any) {
       this.submissionError = err.message || 'Search failed';
+      this.scrollToTop();
     } finally {
       this.searching = false;
       this.cd.detectChanges();
@@ -398,6 +399,7 @@ export class VishnuSahasraNamaParayana implements OnInit {
         'Error joining waitlist. ' + (err?.message || 'Unknown error');
     } finally {
       this.saving = false;
+      this.scrollToTop();
       this.cd.detectChanges();
     }
   }
@@ -428,10 +430,10 @@ export class VishnuSahasraNamaParayana implements OnInit {
 
     this.cd.detectChanges();
 
-    // if (!(await this.runCaptcha())) {
-    //   this.saving = false;
-    //   return;
-    // }
+    if (!(await this.runCaptcha())) {
+      this.saving = false;
+      return;
+    }
 
     if (this.applyToAllAccompanying.value) {
       const primary = this.primarySlots.getRawValue().activities;
@@ -483,6 +485,7 @@ export class VishnuSahasraNamaParayana implements OnInit {
 
     } catch (err: any) {
       this.submissionError = err.message || 'Failed to save slots';
+      this.scrollToTop();
     } finally {
       this.saving = false;
       this.scrollToTop();
