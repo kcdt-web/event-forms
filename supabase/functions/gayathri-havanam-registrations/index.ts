@@ -3,17 +3,17 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-// const ORIGINS = ["https://kcdastrust.org"];
-const ORIGINS = ["http://localhost:4200"];
+const ORIGINS = ["https://kcdastrust.org"];
+// const ORIGINS = ["http://localhost:4200"];
 
-// Rate limiting
-const RATE_LIMIT_WINDOW = 60 * 1000; // 60 seconds
+const RATE_LIMIT_WINDOW = 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 5;
 
 serve(async (req) => {
   try {
     const origin = req.headers.get("Origin") || "";
-    if (!ORIGINS.includes(origin)) return new Response("Forbidden", { status: 403 });
+    if (!ORIGINS.includes(origin))
+      return new Response("Forbidden", { status: 403 });
 
     if (req.method === "OPTIONS") {
       return new Response("ok", {
@@ -26,46 +26,36 @@ serve(async (req) => {
     }
 
     if (req.method !== "POST") {
-      return new Response(JSON.stringify({ success: false, error: "POST required" }), {
-        status: 400,
-        headers: { "Access-Control-Allow-Origin": origin },
-      });
+      return new Response(
+        JSON.stringify({ success: false, error: "POST required" }),
+        { status: 400, headers: { "Access-Control-Allow-Origin": origin } }
+      );
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // ===== RATE LIMITING =====
+    // ---- Rate limit ----
     const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-      (req.conn as any).remoteAddr?.hostname ||
-      "unknown";
+      req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
 
     const now = Date.now();
-    const { data: rateData, error: rateErr } = await supabase
+    const { data: rate } = await supabase
       .from("request_rate_limit")
       .select("*")
       .eq("ip", ip)
       .single();
 
-    if (rateErr && rateErr.code !== "PGRST116") throw rateErr;
-
-    if (rateData) {
-      if (now - rateData.last_request < RATE_LIMIT_WINDOW) {
-        if (rateData.count >= MAX_REQUESTS_PER_WINDOW) {
+    if (rate) {
+      if (now - rate.last_request < RATE_LIMIT_WINDOW) {
+        if (rate.count >= MAX_REQUESTS_PER_WINDOW) {
           return new Response(
-            JSON.stringify({ success: false, message: "Rate limit exceeded" }),
-            {
-              status: 429,
-              headers: {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": origin,
-              },
-            }
+            JSON.stringify({ success: false, error: "Rate limit exceeded" }),
+            { status: 429, headers: { "Access-Control-Allow-Origin": origin } }
           );
         }
         await supabase
           .from("request_rate_limit")
-          .update({ count: rateData.count + 1 })
+          .update({ count: rate.count + 1 })
           .eq("ip", ip);
       } else {
         await supabase
@@ -76,140 +66,26 @@ serve(async (req) => {
     } else {
       await supabase
         .from("request_rate_limit")
-        .insert({ ip, last_request: now, count: 1 });
+        .insert({ ip, count: 1, last_request: now });
     }
-    // ===== END RATE LIMITING =====
 
-    // Parse request body
-    const body = await req.json().catch(() => null);
-    if (!body || !body.mainData) {
+    // ---- Payload ----
+    const body = await req.json();
+    if (!body?.mainData) {
       return new Response(
         JSON.stringify({ success: false, error: "Missing mainData" }),
-        {
-          status: 400,
-          headers: { "Access-Control-Allow-Origin": origin },
-        }
+        { status: 400, headers: { "Access-Control-Allow-Origin": origin } }
       );
     }
 
-    const { mainData } = body;
-    const newSlots: number[] = [
-      ...(mainData.day1 || []),
-      ...(mainData.day2 || []),
-      ...(mainData.day3 || []),
-    ];
+    // ---- RPC ----
+    const { data, error } = await supabase.rpc("gh_register", {
+      payload: body.mainData,
+    });
 
-    // 1️⃣ Check if user exists
-    const { data: existing } = await supabase
-      .from("gh_registrations")
-      .select("id, day1, day2, day3")
-      .eq("mobile_number", mainData.mobile_number)
-      .limit(1);
+    if (error) throw error;
 
-    let mainId: number;
-    let oldSlots: number[] = [];
-
-    if (existing && existing.length > 0) {
-      // ===== EXISTING USER UPDATE =====
-      const old = existing[0];
-      oldSlots = [
-        ...(old.day1 || []),
-        ...(old.day2 || []),
-        ...(old.day3 || []),
-      ];
-
-      const slotsToAdd = newSlots.filter((id) => !oldSlots.includes(id));
-      const slotsToRemove = oldSlots.filter((id) => !newSlots.includes(id));
-
-      // 2️⃣ Check capacity only for slots being added
-      for (const slotId of slotsToAdd) {
-        const { data: slot, error: slotErr } = await supabase
-          .from("gh_slots")
-          .select("registration_count, max_capacity")
-          .eq("id", slotId)
-          .single();
-
-        if (slotErr) throw slotErr;
-
-        if (slot.registration_count >= slot.max_capacity) {
-          return new Response(
-            JSON.stringify({
-              success: false,
-              message: "Selected slots are no longer available",
-              fullSlots: [slotId],
-            }),
-            {
-              status: 400,
-              headers: {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": origin,
-              },
-            }
-          );
-        }
-      }
-
-      const { mobile_number, ...updateData } = mainData;
-      const { error: updErr } = await supabase
-        .from("gh_registrations")
-        .update(updateData)
-        .eq("id", old.id);
-      if (updErr) throw updErr;
-
-      mainId = old.id;
-
-      // Update slot counts
-      for (const slotId of slotsToRemove)
-        await supabase.rpc("gh_decrement_slot", { slot_id: slotId });
-      for (const slotId of slotsToAdd)
-        await supabase.rpc("gh_increment_slot", { slot_id: slotId });
-
-    } else {
-      // ===== NEW REGISTRATION =====
-      // 2️⃣ Check ALL selected slots BEFORE insert
-      for (const slotId of newSlots) {
-        const { data: slot, error: slotErr } = await supabase
-          .from("gh_slots")
-          .select("registration_count, max_capacity")
-          .eq("id", slotId)
-          .single();
-
-        if (slotErr) throw slotErr;
-
-        if (slot.registration_count >= slot.max_capacity) {
-          return new Response(
-            JSON.stringify({
-              success: false,
-              message: "Selected slot(s) are unavailable.",
-              fullSlots: [slotId],
-            }),
-            {
-              status: 400,
-              headers: {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": origin,
-              },
-            }
-          );
-        }
-      }
-
-      // Insert registration now that slots are verified
-      const { data: inserted, error: insertErr } = await supabase
-        .from("gh_registrations")
-        .insert([mainData])
-        .select()
-        .single();
-
-      if (insertErr) throw insertErr;
-      mainId = inserted.id;
-
-      // Increment slot counts
-      for (const slotId of newSlots)
-        await supabase.rpc("gh_increment_slot", { slot_id: slotId });
-    }
-
-    return new Response(JSON.stringify({ success: true, mainId }), {
+    return new Response(JSON.stringify(data), {
       status: 200,
       headers: {
         "Content-Type": "application/json",
@@ -219,13 +95,10 @@ serve(async (req) => {
 
   } catch (err: any) {
     return new Response(
-      JSON.stringify({ success: false, error: err?.message || "Unknown error" }),
+      JSON.stringify({ success: false, error: err.message }),
       {
         status: 400,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": ORIGINS[0],
-        },
+        headers: { "Access-Control-Allow-Origin": ORIGINS[0] },
       }
     );
   }

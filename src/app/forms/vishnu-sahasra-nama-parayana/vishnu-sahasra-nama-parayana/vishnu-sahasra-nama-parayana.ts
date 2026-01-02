@@ -59,6 +59,12 @@ interface Option {
   disabled?: boolean;
 }
 
+interface SlotSummaryRow {
+  full_name: string;
+  day1: string;
+  day2: string;
+}
+
 /* ======================= COMPONENT ======================= */
 
 @Component({
@@ -87,6 +93,7 @@ export class VishnuSahasraNamaParayana implements OnInit {
   primarySlots!: FormGroup;
   accompanyingSlots: FormGroup[] = [];
   applyToAllAccompanying = new FormControl(true);
+  existingRegistrations: SlotSummaryRow[] = [];
 
   /* ======================= DATA ======================= */
   countriesList: Country[] = [];
@@ -268,10 +275,10 @@ export class VishnuSahasraNamaParayana implements OnInit {
     this.searching = true;
     this.cd.detectChanges();
 
-    // if (!(await this.runCaptcha())) {
-    //   this.searching = false;
-    //   return;
-    // }
+    if (!(await this.runCaptcha())) {
+      this.searching = false;
+      return;
+    }
 
     try {
       const resp = await fetch(environment.searchEdgeFunction, {
@@ -287,6 +294,7 @@ export class VishnuSahasraNamaParayana implements OnInit {
 
       this.mainParticipant = data.mainParticipant;
       this.accompanyingParticipant = data.accompParticipants;
+      this.existingRegistrations = data.existingRegistrations || [];
       this.initParticipantSlots();
 
     } catch (err: any) {
@@ -348,6 +356,53 @@ export class VishnuSahasraNamaParayana implements OnInit {
   /* ======================= SUBMIT ======================= */
 
   async submitSlots(): Promise<void> {
+    if (this.noSlotsAvailable) {
+      await this.submitWaitlist();
+    } else {
+      await this.submitRegistrations();
+    }
+  }
+
+  private async submitWaitlist(): Promise<void> {
+    if (this.saving) return;
+
+    this.saving = true;
+    this.submissionError = '';
+
+    /** Prepare payload */
+    const mainData = {
+      kcdt_member_id: this.mainParticipant?.kcdt_member_id,
+      full_name: this.mainParticipant?.full_name,
+      country_code: this.mainParticipant?.country_code,
+      mobile_number: this.mainParticipant?.mobile_number,
+    };
+
+    try {
+      const resp = await fetch(environment.vsnpWaitlists, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mainData }),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok || !data.success) {
+        const errorMsg = data.message || data.error || 'Registration failed';
+        throw new Error(errorMsg);
+      }
+
+      this.registrationSuccess = true;
+      this.scrollToTop();
+    } catch (err: any) {
+      this.scrollToTop();
+      this.submissionError =
+        'Error joining waitlist. ' + (err?.message || 'Unknown error');
+    } finally {
+      this.saving = false;
+      this.cd.detectChanges();
+    }
+  }
+
+  async submitRegistrations(): Promise<void> {
     if (this.saving) return;
 
     this.slotsSubmitted = true;
@@ -411,8 +466,6 @@ export class VishnuSahasraNamaParayana implements OnInit {
         });
       });
 
-      console.log(JSON.stringify({ mainData: payload }))
-
       const resp = await fetch(environment.vsnpRegistrationsEdgeFunction, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -432,6 +485,7 @@ export class VishnuSahasraNamaParayana implements OnInit {
       this.submissionError = err.message || 'Failed to save slots';
     } finally {
       this.saving = false;
+      this.scrollToTop();
       this.cd.detectChanges();
     }
   }
@@ -454,6 +508,7 @@ export class VishnuSahasraNamaParayana implements OnInit {
     // Clear participants
     this.mainParticipant = null;
     this.accompanyingParticipant = [];
+    this.existingRegistrations = [];
 
     // Clear slot forms + validation state
     this.primarySlots = undefined as any;
@@ -477,4 +532,57 @@ export class VishnuSahasraNamaParayana implements OnInit {
     this.cd.detectChanges();
   }
 
+
+  private mapSlotIdsToTimes(slotIds: number[], slots: Option[]): string {
+    if (!slotIds || slotIds.length === 0) {
+      return '-';
+    }
+
+    return slots
+      .filter(s => slotIds.includes(s.id))
+      .map(s => s.slot_time)
+      .join(', ');
+  }
+
+
+
+  get slotSummary(): SlotSummaryRow[] {
+    if (!this.mainParticipant || !this.primarySlots) {
+      return [];
+    }
+
+    const rows: SlotSummaryRow[] = [];
+
+    // Main participant
+    const primaryActivities = this.primarySlots.getRawValue().activities;
+
+    rows.push({
+      full_name: this.mainParticipant.full_name,
+      day1: this.mapSlotIdsToTimes(primaryActivities.day1, this.day1Slots),
+      day2: this.mapSlotIdsToTimes(primaryActivities.day2, this.day2Slots),
+    });
+
+    // Accompanying participants
+    this.accompanyingParticipant.forEach((p, i) => {
+      const activities = this.accompanyingSlots[i]
+        ?.getRawValue()
+        ?.activities;
+
+      rows.push({
+        full_name: p.full_name,
+        day1: this.mapSlotIdsToTimes(activities?.day1, this.day1Slots),
+        day2: this.mapSlotIdsToTimes(activities?.day2, this.day2Slots),
+      });
+    });
+
+    return rows;
+  }
+
+  get hasVsnpRegistrations(): boolean {
+    return this.existingRegistrations.length > 0;
+  }
+
+  printSummary(): void {
+    window.print();
+  }
 }

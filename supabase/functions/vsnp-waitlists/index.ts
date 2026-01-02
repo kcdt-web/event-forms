@@ -3,22 +3,22 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
 const ORIGINS = ["https://kcdastrust.org"];
 // const ORIGINS = ["http://localhost:4200"];
 
-// Rate limiting
-const RATE_LIMIT_WINDOW = 60 * 1000;
+// ===== RATE LIMIT CONFIG =====
+const RATE_LIMIT_WINDOW = 60 * 1000; // 60 seconds
 const MAX_REQUESTS_PER_WINDOW = 5;
 
 serve(async (req) => {
   try {
     const origin = req.headers.get("Origin") || "";
-
-    // ===== CORS =====
     if (!ORIGINS.includes(origin)) {
       return new Response("Forbidden", { status: 403 });
     }
 
+    // Handle CORS preflight
     if (req.method === "OPTIONS") {
       return new Response("ok", {
         headers: {
@@ -34,35 +34,34 @@ serve(async (req) => {
         JSON.stringify({ success: false, error: "POST required" }),
         {
           status: 400,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": origin,
-          },
+          headers: { "Access-Control-Allow-Origin": origin },
         }
       );
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // ===== RATE LIMIT =====
+    // ===== RATE LIMITING =====
     const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
+      req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+      (req.conn as any)?.remoteAddr?.hostname ||
+      "unknown";
 
     const now = Date.now();
-    const { data: rateData } = await supabase
+
+    const { data: rateData, error: rateErr } = await supabase
       .from("request_rate_limit")
       .select("*")
       .eq("ip", ip)
       .single();
 
+    if (rateErr && rateErr.code !== "PGRST116") throw rateErr;
+
     if (rateData) {
       if (now - rateData.last_request < RATE_LIMIT_WINDOW) {
         if (rateData.count >= MAX_REQUESTS_PER_WINDOW) {
           return new Response(
-            JSON.stringify({
-              success: false,
-              error: "Rate limit exceeded",
-            }),
+            JSON.stringify({ success: false, message: "Rate limit exceeded" }),
             {
               status: 429,
               headers: {
@@ -88,19 +87,48 @@ serve(async (req) => {
         .from("request_rate_limit")
         .insert({ ip, last_request: now, count: 1 });
     }
-    // ===== END RATE LIMIT =====
+    // ===== END RATE LIMITING =====
 
-    // ===== PAYLOAD VALIDATION =====
+    // Parse body
     const body = await req.json().catch(() => null);
+    if (!body) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Missing request body" }),
+        {
+          status: 400,
+          headers: { "Access-Control-Allow-Origin": origin },
+        }
+      );
+    }
 
-    if (!body || !Array.isArray(body.mainData)) {
+    const { kcdt_member_id, full_name, country_code, mobile_number } =
+      body.mainData || {};
+
+    if (!kcdt_member_id || !full_name || !country_code || !mobile_number) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Missing required fields" }),
+        {
+          status: 400,
+          headers: { "Access-Control-Allow-Origin": origin },
+        }
+      );
+    }
+
+    // Check for existing mobile number
+    const { data: existing } = await supabase
+      .from("vsnp_waitlist")
+      .select("mobile_number")
+      .eq("mobile_number", mobile_number)
+      .single();
+
+    if (existing) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "Invalid payload",
+          message: "Mobile number already exists",
         }),
         {
-          status: 400,
+          status: 409,
           headers: {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": origin,
@@ -109,33 +137,19 @@ serve(async (req) => {
       );
     }
 
-    // ===== CALL TRANSACTION RPC =====
-    const { error } = await supabase.rpc(
-      "vsnp_register_bulk",
-      { payload: body.mainData }
-    );
+    // Insert new record
+    const { data, error } = await supabase
+      .from("vsnp_waitlist")
+      .insert([
+        { kcdt_member_id, full_name, country_code, mobile_number },
+      ]);
 
-    if (error) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: error.message,
-        }),
-        {
-          status: 400,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": origin,
-          },
-        }
-      );
-    }
+    if (error) throw error;
 
-    // ===== SUCCESS =====
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({ success: true, data }),
       {
-        status: 200,
+        status: 201,
         headers: {
           "Content-Type": "application/json",
           "Access-Control-Allow-Origin": origin,
@@ -146,7 +160,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: err?.message || "Unknown error",
+        error: err.message || "Unknown error",
       }),
       {
         status: 500,
