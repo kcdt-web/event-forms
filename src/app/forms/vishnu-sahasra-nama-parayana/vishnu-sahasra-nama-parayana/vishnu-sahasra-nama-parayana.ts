@@ -390,16 +390,15 @@ export class VishnuSahasraNamaParayana implements OnInit {
         const errorMsg = data.message || data.error || 'Registration failed';
         throw new Error(errorMsg);
       }
-
-      this.registrationSuccess = true;
       this.scrollToTop();
+      this.registrationSuccess = true;
     } catch (err: any) {
       this.scrollToTop();
       this.submissionError =
         'Error joining waitlist. ' + (err?.message || 'Unknown error');
     } finally {
-      this.saving = false;
       this.scrollToTop();
+      this.saving = false;
       this.cd.detectChanges();
     }
   }
@@ -480,15 +479,15 @@ export class VishnuSahasraNamaParayana implements OnInit {
         throw new Error(errorMsg);
       }
 
-      this.registrationSuccess = true;
       this.scrollToTop();
+      this.registrationSuccess = true;
 
     } catch (err: any) {
       this.submissionError = err.message || 'Failed to save slots';
       this.scrollToTop();
     } finally {
-      this.saving = false;
       this.scrollToTop();
+      this.saving = false;
       this.cd.detectChanges();
     }
   }
