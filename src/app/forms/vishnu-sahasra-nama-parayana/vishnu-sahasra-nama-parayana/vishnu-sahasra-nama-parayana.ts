@@ -284,7 +284,10 @@ export class VishnuSahasraNamaParayana implements OnInit {
       const resp = await fetch(environment.searchEdgeFunction, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mobile_number: mobileCtrl.value }),
+        body: JSON.stringify({
+          mobile_number: mobileCtrl.value,
+          context: 'VSNP'
+        }),
       });
 
       const data = await resp.json();

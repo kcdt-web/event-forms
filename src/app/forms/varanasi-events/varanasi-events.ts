@@ -85,7 +85,7 @@ export class VaranasiEvents implements OnInit {
   submitted = false;
   isMobile = false;
 
-  viewRegistration = false;
+  viewRegistration = true;
   invalidSearchNumber = false
   mainParticipant!: Participant | null;
   accompanyingParticipant!: Participant[];

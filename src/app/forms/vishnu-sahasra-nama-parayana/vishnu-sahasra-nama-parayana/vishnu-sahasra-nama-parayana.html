@@ -66,8 +66,12 @@
 }
 } @else {
 <h1 class="mb-4">Reserve Your Spot for Vishnu Sahasra Nama Parayana</h1>
-<div class="alert alert-primary">Only participants who have registered for the Varanasi event will be able to select a Parayana slot.
-If you are an accompanying participant, please reach out to the person who registered you for the event.</div>
+<div class="alert alert-primary">
+    <ul class="m-0 p-0 px-3">
+        <li class="mb-2">Parayana slots can be selected only by participants registered for the Vishnu Sahasranama Parayana during the Varanasi event registration.</li>
+        <li>Accompanying participants are requested to reach out to the individual who registered them for the event.</li>
+    </ul>
+</div>
 <p>We kindly request all participants to register in advance and select the time slot(s) they wish to attend. You may choose the same slot for yourself and all accompanying participants, or select individual slots for each participant as preferred. This will help us organize the Parayana smoothly.</p>
 
 <form [formGroup]="searchForm" novalidate>
@@ -171,7 +175,7 @@ If you are an accompanying participant, please reach out to the person who regis
             </div>
 
             <div [class]="mainParticipant.status ? 'mb-4' : ''">
-                <p class="text-muted small m-0 mb-1">Accompanying Participants</p>
+                <p class="text-muted small m-0 mb-1">Accompanying Participants Registered for Vishnu Sahasra Nama Parayana</p>
                 <p class="fw-semibold m-0">{{accompanyingParticipant.length || '0'}} Participants</p>
             </div>
 

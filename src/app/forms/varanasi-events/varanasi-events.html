@@ -15,9 +15,7 @@
 </div>
 } @else {
 <h1>Be Part of the Varanasi Event — Register Now!</h1>
-<p class="mb-4">Entry is strictly limited to registered participants only. Please use the form below to complete your
-    registration.
-</p>
+<div class="alert alert-primary my-3">Thank you for your interest. Due to an overwhelming response, registrations are now closed as the venue has reached full capacity. If you are already registered, please search for your details below.</div>
 
 @if (!viewRegistration) {
 <div class="mb-4"><span class="fw-semibold">Already registered?</span><p-button
@@ -242,9 +240,9 @@
     <p-button styleClass="kcdt-primary-button" type="submit" label="Register" [loading]="loading"></p-button>
 </form>
 } @else {
-<div class="mb-4"><span class="fw-semibold">Not registered yet?</span><p-button
+<!-- <div class="mb-4"><span class="fw-semibold">Not registered yet?</span><p-button
         (click)="viewRegistration? viewRegistration = false : viewRegistration = true; resetForm();"
-        label="Submit your registration" link styleClass="p-0 px-1" /></div>
+        label="Submit your registration" link styleClass="p-0 px-1" /></div> -->
 <form [formGroup]="searchForm" (ngSubmit)="searchRegistration()">
 
     @if (!mainParticipant) {
