@@ -4,7 +4,6 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ORIGINS = ["https://kcdastrust.org"];
-// const ORIGINS = ["http://localhost:4200"];
 
 // Rate limiting
 const RATE_LIMIT_WINDOW = 60 * 1000;
@@ -14,7 +13,7 @@ serve(async (req) => {
   try {
     const origin = req.headers.get("Origin") || "";
 
-    // ===== CORS =====
+    /* ======================= CORS ======================= */
     if (!ORIGINS.includes(origin)) {
       return new Response("Forbidden", { status: 403 });
     }
@@ -44,7 +43,7 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // ===== RATE LIMIT =====
+    /* ======================= RATE LIMIT ======================= */
     const ip =
       req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
 
@@ -59,10 +58,7 @@ serve(async (req) => {
       if (now - rateData.last_request < RATE_LIMIT_WINDOW) {
         if (rateData.count >= MAX_REQUESTS_PER_WINDOW) {
           return new Response(
-            JSON.stringify({
-              success: false,
-              error: "Rate limit exceeded",
-            }),
+            JSON.stringify({ success: false, error: "Rate limit exceeded" }),
             {
               status: 429,
               headers: {
@@ -88,17 +84,12 @@ serve(async (req) => {
         .from("request_rate_limit")
         .insert({ ip, last_request: now, count: 1 });
     }
-    // ===== END RATE LIMIT =====
 
-    // ===== PAYLOAD VALIDATION =====
+    /* ======================= BODY ======================= */
     const body = await req.json().catch(() => null);
-
-    if (!body || !Array.isArray(body.mainData)) {
+    if (!body) {
       return new Response(
-        JSON.stringify({
-          success: false,
-          error: "Invalid payload",
-        }),
+        JSON.stringify({ success: false, error: "Invalid JSON" }),
         {
           status: 400,
           headers: {
@@ -109,7 +100,80 @@ serve(async (req) => {
       );
     }
 
-    // ===== CALL TRANSACTION RPC =====
+    /* =====================================================
+       DELETE VSNP REGISTRATIONS (CHANGE SLOTS)
+       ===================================================== */
+    if (body.action === "DELETE_VSNP") {
+      const sourceReferences = body.source_reference;
+
+      if (!Array.isArray(sourceReferences) || sourceReferences.length === 0) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "source_reference must be a non-empty array",
+          }),
+          {
+            status: 400,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": origin,
+            },
+          }
+        );
+      }
+
+      const { error } = await supabase.rpc(
+        "vsnp_delete_by_source_refs",
+        {
+          p_source_reference: sourceReferences
+        }
+      );
+
+      if (error) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: error.message,
+          }),
+          {
+            status: 500,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": origin,
+            },
+          }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": origin,
+          },
+        }
+      );
+    }
+
+
+    /* =====================================================
+       REGISTER / UPDATE VSNP SLOTS (UNCHANGED)
+       ===================================================== */
+    if (!Array.isArray(body.mainData)) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid payload" }),
+        {
+          status: 400,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": origin,
+          },
+        }
+      );
+    }
+
     const { error } = await supabase.rpc(
       "vsnp_register_bulk",
       { payload: body.mainData }
@@ -117,10 +181,7 @@ serve(async (req) => {
 
     if (error) {
       return new Response(
-        JSON.stringify({
-          success: false,
-          error: error.message,
-        }),
+        JSON.stringify({ success: false, error: error.message }),
         {
           status: 400,
           headers: {
@@ -131,7 +192,6 @@ serve(async (req) => {
       );
     }
 
-    // ===== SUCCESS =====
     return new Response(
       JSON.stringify({ success: true }),
       {
@@ -142,6 +202,7 @@ serve(async (req) => {
         },
       }
     );
+
   } catch (err: any) {
     return new Response(
       JSON.stringify({

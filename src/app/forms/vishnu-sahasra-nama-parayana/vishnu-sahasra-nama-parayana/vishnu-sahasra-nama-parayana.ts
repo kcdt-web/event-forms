@@ -65,6 +65,13 @@ interface SlotSummaryRow {
   day2: string;
 }
 
+interface VSNPSelection {
+  full_name: string;
+  day1: number[];
+  day2: number[];
+}
+
+
 /* ======================= COMPONENT ======================= */
 
 @Component({
@@ -100,6 +107,7 @@ export class VishnuSahasraNamaParayana implements OnInit {
   day1Slots: Option[] = [];
   day2Slots: Option[] = [];
   noSlotsAvailable: boolean = false;
+  vsnp: VSNPSelection[] = [];
 
   mainParticipant: Participant | null = null;
   accompanyingParticipant: Participant[] = [];
@@ -298,6 +306,7 @@ export class VishnuSahasraNamaParayana implements OnInit {
       this.mainParticipant = data.mainParticipant;
       this.accompanyingParticipant = data.accompParticipants;
       this.existingRegistrations = data.existingRegistrations || [];
+      this.vsnp = data.vsnp || [];
       this.initParticipantSlots();
 
     } catch (err: any) {
@@ -533,6 +542,8 @@ export class VishnuSahasraNamaParayana implements OnInit {
       mobile_number: null,
     });
 
+    this.applyToAllAccompanying.setValue(true, { emitEvent: false });
+
     this.invalidSearchNumber = false;
     this.mobileNumberErrorMsg = '';
 
@@ -550,8 +561,6 @@ export class VishnuSahasraNamaParayana implements OnInit {
       .map(s => s.slot_time)
       .join(', ');
   }
-
-
 
   get slotSummary(): SlotSummaryRow[] {
     if (!this.mainParticipant || !this.primarySlots) {
@@ -585,8 +594,105 @@ export class VishnuSahasraNamaParayana implements OnInit {
     return rows;
   }
 
+  get vsnpSummary(): SlotSummaryRow[] {
+    if (!this.vsnp || this.vsnp.length === 0) {
+      return [];
+    }
+
+    console.log(this.vsnp)
+
+    return this.vsnp.map(v => ({
+      full_name: v.full_name,
+      day1: v.day1.toString(),
+      day2: v.day2.toString(),
+    }));
+  }
+
+  async confirmChangeSlots(): Promise<void> {
+    if (this.noSlotsAvailable) return;
+
+    const confirmed = window.confirm(
+      'Your current slot selection will be removed.\n\n' +
+      'You will need to select new slots, subject to availability.\n\n' +
+      'Do you want to continue?'
+    );
+
+    if (!confirmed) return;
+
+    await this.removeExistingVsnp();
+  }
+
+  private async removeExistingVsnp(): Promise<void> {
+    try {
+      this.saving = true;
+
+      const sourceReferences = this.getAllSourceReferences();
+
+      if (!sourceReferences.length) {
+        throw new Error('No participants found for slot removal');
+      }
+
+      const resp = await fetch(environment.vsnpRegistrationsEdgeFunction, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'DELETE_VSNP',
+          source_reference: sourceReferences
+        })
+      });
+
+      const data = await resp.json();
+      if (!resp.ok || !data.success) {
+        throw new Error(data.error || 'Failed to remove slots');
+      }
+
+      // Clear frontend state
+      this.vsnp = [];
+      this.existingRegistrations = [];
+      this.registrationSuccess = false;
+      this.slotsSubmitted = false;
+
+      // Re-init slot selection
+      this.initParticipantSlots();
+      await this.loadSlotsAvailability();
+
+      this.scrollToTop();
+
+    } catch (err: any) {
+      this.submissionError = err.message || 'Failed to change slots';
+    } finally {
+      this.saving = false;
+      this.cd.detectChanges();
+    }
+  }
+
+  private getAllSourceReferences(): number[] {
+    const refs: number[] = [];
+
+    // Main participant
+    if (this.mainParticipant?.id) {
+      refs.push(this.mainParticipant.id);
+    }
+
+    // Accompanying participants
+    if (Array.isArray(this.accompanyingParticipant)) {
+      this.accompanyingParticipant.forEach(p => {
+        if (p?.id) {
+          refs.push(p.id);
+        }
+      });
+    }
+
+    return refs;
+  }
+
+
   get hasVsnpRegistrations(): boolean {
     return this.existingRegistrations.length > 0;
+  }
+
+  get hasExistingVsnp(): boolean {
+    return this.vsnp.length > 0;
   }
 
   printSummary(): void {

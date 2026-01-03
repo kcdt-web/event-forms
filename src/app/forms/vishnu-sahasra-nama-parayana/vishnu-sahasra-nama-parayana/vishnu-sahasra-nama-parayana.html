@@ -49,13 +49,12 @@
 
     <div class="confirmation-actions">
         <div class="d-flex gap-3 mb-5 flex-wrap">
-            <button class="btn btn-secondary" type="button" (click)="printSummary()">
-                Print Confirmation
-            </button>
+            <p-button type="button" label="Print Confirmation" (onClick)="printSummary()" styleClass="btn btn-secondary">
+            </p-button>
 
-            <a class="btn btn btn-secondary" href="/vishnu-sahasra-nama-parayana">
-                Update Slots
-            </a>
+            <p-button type="button" [loading]="saving" [disabled]="noSlotsAvailable" label="Change Slot"
+                (onClick)="confirmChangeSlots()" styleClass="btn btn-secondary">
+            </p-button>
         </div>
 
         <a href="/varanasi-event/">
@@ -68,11 +67,15 @@
 <h1 class="mb-4">Reserve Your Spot for Vishnu Sahasra Nama Parayana</h1>
 <div class="alert alert-primary">
     <ul class="m-0 p-0 px-3">
-        <li class="mb-2">Parayana slots can be selected only by participants registered for the Vishnu Sahasranama Parayana during the Varanasi event registration.</li>
-        <li>Accompanying participants are requested to reach out to the individual who registered them for the event.</li>
+        <li class="mb-2">Parayana slots can be selected only by participants registered for the Vishnu Sahasranama
+            Parayana during the Varanasi event registration.</li>
+        <li>Accompanying participants are requested to reach out to the individual who registered them for the event.
+        </li>
     </ul>
 </div>
-<p>We kindly request all participants to register in advance and select the time slot(s) they wish to attend. You may choose the same slot for yourself and all accompanying participants, or select individual slots for each participant as preferred. This will help us organize the Parayana smoothly.</p>
+<p>We kindly request all participants to register in advance and select the time slot(s) they wish to attend. You may
+    choose the same slot for yourself and all accompanying participants, or select individual slots for each participant
+    as preferred. This will help us organize the Parayana smoothly.</p>
 
 <form [formGroup]="searchForm" novalidate>
 
@@ -156,8 +159,7 @@
         }
 
         <p-panel class="mb-4" showHeader="false">
-            <h4 class="mb-4">{{mainParticipant.full_name}}</h4>
-
+            <h4 class="m-0 mb-4">{{mainParticipant.full_name}}</h4>
             <div class="mb-4">
                 <p class="text-muted small m-0 mb-1">Registration Status</p>
                 <p class="fw-semibold m-0">
@@ -168,20 +170,18 @@
                     }
                 </p>
             </div>
-
             <div class="mb-4">
                 <p class="text-muted small m-0 mb-1">Registered On</p>
                 <p class="fw-semibold m-0">{{mainParticipant.registered_on | date:'medium':'local'}}</p>
             </div>
 
             <div [class]="mainParticipant.status ? 'mb-4' : ''">
-                <p class="text-muted small m-0 mb-1">Accompanying Participants Registered for Vishnu Sahasra Nama Parayana</p>
+                <p class="text-muted small m-0 mb-1">Accompanying Participants Registered for Vishnu Sahasra Nama
+                    Parayana</p>
                 <p class="fw-semibold m-0">{{accompanyingParticipant.length || '0'}} Participants</p>
             </div>
-
-            @if (mainParticipant.status){
+            @if (mainParticipant.status && !hasExistingVsnp){
             <hr />
-
             <div class="mb-4">
                 <div class="my-4">
                     <h5>Which day(s) will you be attending the Vishnu Sahasra Nama Parayana? <span
@@ -199,7 +199,6 @@
                     Select at least one time slot for Day 1 or Day 2.
                 </div>
             </div>
-
             @if (!noSlotsAvailable && accompanyingParticipant.length !== 0) {
             <div>
                 <label class="fw-semibold mb-2 d-block">
@@ -238,15 +237,50 @@
             </div>
         </div>
 
-        @if (mainParticipant.status){
+        @if (mainParticipant.status && !hasExistingVsnp){
         <!-- Submit Button -->
         <p-button type="button" [label]="saving ? 'Saving…' : (noSlotsAvailable ? 'Join waitlist' : 'Save Slots')"
             [loading]="saving" [disabled]="saving" (onClick)="submitSlots()">
         </p-button>
         }
+        @if (hasExistingVsnp) {
+        <p-panel class="mb-4" showHeader="false">
+            <h4 class="m-0 mb-3">Your Vishnu Sahasra Nama Parayana Slots</h4>
+            <p>You have already registered. Below are your confirmed selections. </p>
+            <div class="table-responsive mt-3">
+                <table class="table table-striped align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Participant Name</th>
+                            <th>Day 1 (14 March 2026)</th>
+                            <th>Day 2 (15 March 2026)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr *ngFor="let row of vsnpSummary">
+                            <td class="fw-semibold">{{ row.full_name }}</td>
+                            <td>{{ row.day1 }}</td>
+                            <td>{{ row.day2 }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="confirmation-actions">
+                <div class="d-flex gap-3 flex-wrap">
+                    <p-button type="button" label="Print Confirmation" (onClick)="printSummary()"
+                        styleClass="btn btn-secondary">
+                    </p-button>
+
+                    <p-button type="button" [loading]="saving" [disabled]="noSlotsAvailable" label="Change Slot"
+                        (onClick)="confirmChangeSlots()" styleClass="btn btn-secondary">
+                    </p-button>
+                </div>
+            </div>
+        </p-panel>
+        }
     </fieldset>
     }
-
 </form>
 }
 
