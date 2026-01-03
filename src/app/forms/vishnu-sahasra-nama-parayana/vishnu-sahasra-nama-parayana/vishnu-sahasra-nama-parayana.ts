@@ -482,8 +482,8 @@ export class VishnuSahasraNamaParayana implements OnInit {
         throw new Error(errorMsg);
       }
 
-      this.scrollToTop();
       this.registrationSuccess = true;
+      this.scrollToTop();
 
     } catch (err: any) {
       this.submissionError = err.message || 'Failed to save slots';
@@ -496,9 +496,11 @@ export class VishnuSahasraNamaParayana implements OnInit {
   }
 
   private scrollToTop(): void {
-    window.scrollTo(0, 0);
+    setTimeout(() => {
+      //@ts-ignore
+      document.scrollingElement.scrollTop = 0;
+    }, 0)
   }
-
 
   hasSlotError(form: FormGroup): boolean {
     return (
