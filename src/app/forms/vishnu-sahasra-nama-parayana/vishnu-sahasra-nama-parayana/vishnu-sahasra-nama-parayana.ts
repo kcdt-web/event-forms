@@ -436,6 +436,7 @@ export class VishnuSahasraNamaParayana implements OnInit {
     if (primaryInvalid || accompanyingInvalid) {
       this.saving = false;
       this.cd.detectChanges();
+      this.scrollToFirstSlotError();
       return;
     }
 
@@ -599,8 +600,6 @@ export class VishnuSahasraNamaParayana implements OnInit {
       return [];
     }
 
-    console.log(this.vsnp)
-
     return this.vsnp.map(v => ({
       full_name: v.full_name,
       day1: v.day1.toString(),
@@ -698,4 +697,20 @@ export class VishnuSahasraNamaParayana implements OnInit {
   printSummary(): void {
     window.print();
   }
+
+  private scrollToFirstSlotError(): void {
+    setTimeout(() => {
+      const firstErrorEl = this.el.nativeElement.querySelector(
+        '.slot-section .p-invalid, .slot-section .text-danger'
+      );
+
+      if (firstErrorEl) {
+        firstErrorEl.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
+        });
+      }
+    }, 0);
+  }
+
 }
