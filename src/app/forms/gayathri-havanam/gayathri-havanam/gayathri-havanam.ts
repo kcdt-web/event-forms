@@ -158,6 +158,24 @@ export class GayathriHavanam implements OnInit {
     this.loadSlotsAvailability();
   }
 
+  /* ======================= CAPTCHA ======================= */
+
+  private async runCaptcha(): Promise<boolean> {
+    try {
+      const verified = await this.validateRecaptcha.verifyRecaptcha();
+      if (!verified) {
+        this.submissionError = '[EC-TVF] Verification failed';
+        this.cd.detectChanges();
+        return false;
+      }
+      return true;
+    } catch (err: any) {
+      this.submissionError = '[EC-GE] ' + (err?.message || 'Captcha error');
+      this.cd.detectChanges();
+      return false;
+    }
+  }
+
   /* ======================= VALIDATORS ======================= */
 
   /** Ensures at least one day has slots selected */
@@ -278,6 +296,11 @@ export class GayathriHavanam implements OnInit {
 
     this.searching = true;
     this.cd.detectChanges();
+
+    if (!(await this.runCaptcha())) {
+      this.searching = false;
+      return;
+    }
 
     try {
       const resp = await fetch(environment.searchEdgeFunction, {
@@ -465,6 +488,11 @@ export class GayathriHavanam implements OnInit {
       this.saving = false;
       this.cd.detectChanges();
       this.scrollToFirstSlotError();
+      return;
+    }
+
+    if (!(await this.runCaptcha())) {
+      this.saving = false;
       return;
     }
 
