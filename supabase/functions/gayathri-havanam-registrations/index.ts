@@ -3,8 +3,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ORIGINS = ["https://kcdastrust.org"];
-// const ORIGINS = ["http://localhost:4200"];
+const ORIGINS = ["http://localhost:4200"];
 
 const RATE_LIMIT_WINDOW = 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 5;
@@ -12,9 +11,11 @@ const MAX_REQUESTS_PER_WINDOW = 5;
 serve(async (req) => {
   try {
     const origin = req.headers.get("Origin") || "";
-    if (!ORIGINS.includes(origin))
+    if (!ORIGINS.includes(origin)) {
       return new Response("Forbidden", { status: 403 });
+    }
 
+    // ---- CORS ----
     if (req.method === "OPTIONS") {
       return new Response("ok", {
         headers: {
@@ -39,6 +40,7 @@ serve(async (req) => {
       req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
 
     const now = Date.now();
+
     const { data: rate } = await supabase
       .from("request_rate_limit")
       .select("*")
@@ -53,6 +55,7 @@ serve(async (req) => {
             { status: 429, headers: { "Access-Control-Allow-Origin": origin } }
           );
         }
+
         await supabase
           .from("request_rate_limit")
           .update({ count: rate.count + 1 })
@@ -71,27 +74,54 @@ serve(async (req) => {
 
     // ---- Payload ----
     const body = await req.json();
-    if (!body?.mainData) {
+
+    if (!body?.action) {
       return new Response(
-        JSON.stringify({ success: false, error: "Missing mainData" }),
+        JSON.stringify({ success: false, error: "Missing action" }),
         { status: 400, headers: { "Access-Control-Allow-Origin": origin } }
       );
     }
 
-    // ---- RPC ----
-    const { data, error } = await supabase.rpc("gh_register", {
-      payload: body.mainData,
-    });
+    let rpcName: string;
+    let rpcParams: Record<string, any>;
 
+    switch (body.action) {
+      case "DELETE_VSNP":
+        rpcName = "vsnp_delete_by_source_refs";
+        rpcParams = { p_source_reference: body.source_reference };
+        break;
+
+      case "DELETE_GH":
+        rpcName = "gh_delete_by_source_refs";
+        rpcParams = { p_source_reference: body.source_reference };
+        break;
+
+      case "REGISTER_GH":
+        rpcName = "gh_register";
+        rpcParams = { payload: body.mainData };
+        break;
+
+      default:
+        return new Response(
+          JSON.stringify({ success: false, error: "Invalid action" }),
+          { status: 400, headers: { "Access-Control-Allow-Origin": origin } }
+        );
+    }
+
+    // ---- RPC Call ----
+    const { data, error } = await supabase.rpc(rpcName, rpcParams);
     if (error) throw error;
 
-    return new Response(JSON.stringify(data), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": origin,
-      },
-    });
+    return new Response(
+      JSON.stringify({ success: true, data }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": origin,
+        },
+      }
+    );
 
   } catch (err: any) {
     return new Response(

@@ -16,7 +16,7 @@
 } @else {
 <div class="alert p-4 print-area">
     <h1 class="mb-3">Slot Saved Successfully!</h1>
-    <p>Your slot for the <em>Vishnu Sahasra Nama Parayana</em> has been reserved. All further updates and important
+    <p>Your slot for the <em>Gayathri Havanam</em> has been reserved. All further updates and important
         details will be communicated to your registered mobile number.
     </p>
 
@@ -30,6 +30,7 @@
                         <th>Participant Name</th>
                         <th>Day 1 (14 March 2026)</th>
                         <th>Day 2 (15 March 2026)</th>
+                        <th>Day 3 (16 March 2026)</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -37,6 +38,7 @@
                         <td class="fw-semibold">{{ row.full_name }}</td>
                         <td>{{ row.day1 }}</td>
                         <td>{{ row.day2 }}</td>
+                        <td>{{ row.day3 }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -74,25 +76,39 @@
 </div>
 }
 } @else {
-<h1 class="mb-4">Reserve Your Spot for Vishnu Sahasra Nama Parayana</h1>
+<h1 class="mb-4">Reserve Your Spot for Gayathri Havanam</h1>
 <div class="alert alert-primary">
     <ul class="m-0 p-0 px-3">
-        <li class="mb-2">Parayana slots can be selected only by participants registered for the Vishnu Sahasranama
-            Parayana during the Varanasi event registration.</li>
-        <li class="m-0">Accompanying participants are requested to reach out to the individual who registered them for
-            the event.
-        </li>
+        <li class="mb-2">Performing Gayatri Japam daily after Sandhyavandanam,with a sankalpa for universal peace, is
+            required and
+            mandatory for registration as part of the Shanti Homam.</li>
+        <li class="m-0">If you haven't started yet, begin today. For instructions, call <a
+                href="tel:+919494877171">9494877171</a>.</li>
     </ul>
 </div>
-<p>We kindly request all participants to register in advance and select the time slot(s) they wish to attend. You may
-    choose the same slot for yourself and all accompanying participants, or select individual slots for each participant
-    as preferred. This will help us organize the Parayana smoothly.</p>
+<p>We kindly request all participants to register in advance and select the time slot(s) they wish to attend. This will
+    help us organize the Parayana smoothly.</p>
 
 <form [formGroup]="searchForm" novalidate>
 
     @if (!mainParticipant) {
     <fieldset class="border rounded p-4 mb-4">
         <legend class="h5 m-0 mb-4">Search your registration</legend>
+
+        <!-- KCDT Member ID -->
+        <div class="mb-4">
+            <p-floatlabel variant="on">
+                <p-inputnumber mode="decimal" inputId="member_id" [useGrouping]="false" inputStyleClass="form-control"
+                    fluid="true" formControlName="kcdt_member_id"></p-inputnumber>
+                <label for="member_id" class="form-label d-block">KCDT Member ID <span
+                        class="text-danger">*</span></label>
+            </p-floatlabel>
+            <div *ngIf="searchForm.get('kcdt_member_id')?.touched && searchForm.get('kcdt_member_id')?.invalid"
+                class="form-text text-danger">
+                KCDT Member ID is required.
+            </div>
+        </div>
+
         <div class="mb-4">
             <div class="d-flex flex-column flex-md-row gap-2">
 
@@ -186,22 +202,25 @@
                 <p class="fw-semibold m-0">{{mainParticipant.registered_on | date:'medium':'local'}}</p>
             </div>
 
-            <div [class]="mainParticipant.status ? 'mb-4' : ''">
-                <p class="text-muted small m-0 mb-1">Accompanying Participants Registered for Vishnu Sahasra Nama
-                    Parayana</p>
-                <p class="fw-semibold m-0">{{accompanyingParticipant.length || '0'}} Participants</p>
-            </div>
-            @if (mainParticipant.status && !hasExistingVsnp){
+            @if (mainParticipant.status && !hasExistingGh){
             <hr />
             <div class="mb-4">
                 <div class="my-4">
-                    <h5>Which day(s) will you be attending the Vishnu Sahasra Nama Parayana? <span
-                            class="text-danger">*</span></h5>
+                    <h5>Which day(s) will you be attending the Gayathri Havanam? <span class="text-danger">*</span></h5>
                     <div class="d-flex text-muted small gap-2 align-items-center mb-4">
                         <i class="pi pi-info-circle"></i>
-                        <span>Select at least one 1-hour slot from the options below.</span>
+                        <span>Select at least one 1-hour slot from the options below. You can choose up to <span
+                                class="fw-semibold">4</span> slots per day, with
+                            a maximum of <span class="fw-semibold">2</span> consecutive slots.</span>
                     </div>
                 </div>
+
+                <div class="alert alert-info"
+                    *ngIf="(getSelectedCount('day1') <= 4 || getSelectedCount('day2') <= 4 || getSelectedCount('day3') <= 4) && (hasConsecutiveOrDisabledInBetween('day1') || hasConsecutiveOrDisabledInBetween('day2') || hasConsecutiveOrDisabledInBetween('day3'))">
+                    Some slots are disabled based on your selection pattern. You can choose up to 4 slots per day,
+                    with a maximum of 2 consecutive slots.
+                </div>
+
                 <div [formGroup]="primarySlots">
                     <ng-container *ngTemplateOutlet="slotSelector; context: { form: primarySlots }">
                     </ng-container>
@@ -210,54 +229,19 @@
                     Select at least one time slot for Day 1 or Day 2.
                 </div>
             </div>
-            @if (!noSlotsAvailable && accompanyingParticipant.length !== 0) {
-            <div>
-                <label class="fw-semibold mb-2 d-block">
-                    Should these time slots be applied to all accompanying participants?
-                </label>
-
-                <p-selectbutton [options]="yesNoOptions" [formControl]="applyToAllAccompanying" optionLabel="label"
-                    optionValue="value">
-                </p-selectbutton>
-            </div>
-            }
             }
         </p-panel>
 
-        <div *ngIf="!applyToAllAccompanying.value">
-            <h5 class="m-0 mb-3">Select slots for accompanying participants</h5>
-            <div *ngFor="let accomp of accompanyingParticipant; let i = index">
-                <p-panel [toggleable]="true" class="mb-4">
-                    <ng-template #header>
-                        <div class="d-flex flex-column py-2">
-                            <div class="fw-semibold">{{ accomp.full_name }}</div>
-                            <div class="text-muted small">Accompanying Participant {{ i + 1 }}</div>
-                        </div>
-                    </ng-template>
-                    <div [formGroup]="accompanyingSlots[i]">
-                        <div class="mt-3" class="accompanying-slots"
-                            [class.copy-mode]="accompanyingSlots[i].get('copyFromPrimary')?.value">
-                            <ng-container *ngTemplateOutlet="slotSelector; context: { form: accompanyingSlots[i] }">
-                            </ng-container>
-                        </div>
-                        <div *ngIf="hasSlotError(accompanyingSlots[i])" class="text-danger small mt-2">
-                            Select at least one time slot for this participant.
-                        </div>
-                    </div>
-                </p-panel>
-            </div>
-        </div>
-
-        @if (mainParticipant.status && !hasExistingVsnp){
+        @if (mainParticipant.status && !hasExistingGh){
         <!-- Submit Button -->
         <p-button type="button" [label]="saving ? 'Saving…' : (noSlotsAvailable ? 'Join waitlist' : 'Save Slots')"
             [loading]="saving" [disabled]="saving" (onClick)="submitSlots()">
         </p-button>
         }
 
-        @if (hasExistingVsnp) {
+        @if (hasExistingGh) {
         <p-panel class="mb-4" showHeader="false">
-            <h4 class="m-0 mb-3">Your Vishnu Sahasra Nama Parayana Slots</h4>
+            <h4 class="m-0 mb-3">Your Gayathri Havanam Slots</h4>
             @if (noSlotsAvailable) {
             <div class="alert alert-danger">Slot changes are temporarily unavailable because we’re currently at full
                 capacity.</div>
@@ -270,13 +254,15 @@
                             <th>Participant Name</th>
                             <th>Day 1 (14 March 2026)</th>
                             <th>Day 2 (15 March 2026)</th>
+                            <th>Day 2 (16 March 2026)</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr *ngFor="let row of vsnpSummary">
+                        <tr *ngFor="let row of ghSummary">
                             <td class="fw-semibold">{{ row.full_name }}</td>
                             <td>{{ row.day1 }}</td>
                             <td>{{ row.day2 }}</td>
+                            <td>{{ row.day3 }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -341,10 +327,44 @@
                     </ng-template>
                 </p-selectbutton>
             </div>
-            <div>
+            <div class="mb-4">
                 <p class="text-muted small m-0 mb-2 fw-semibold">Day 2 - 15 March 2026</p>
                 <p-selectbutton id="activities-day2" [options]="day2Slots" multiple="true" styleClass="border rounded"
                     class="d-flex flex-column flex-md-row flex-md-wrap gap-2 activities" formControlName="day2"
+                    optionLabel="slot_time" optionValue="id" optionDisabled="disabled" [ngClass]="{
+                    'p-invalid':
+                        form.get('activities')?.errors?.['noDaysSelected'] &&
+                        (
+                        form.get('activities')?.touched ||
+                        form.get('activities')?.dirty ||
+                        slotsSubmitted
+                        )
+                    }">
+                    <ng-template #item let-item>
+                        <div class="d-flex flex-column justify-content-center align-items-center gap-2 w-100">
+                            <div class="fw-semibold">{{item.slot_time}}</div>
+                            @if (!item.disabled){
+                            <div class="small fw-regular" [ngClass]="
+                                            item.disabled ? 'text-muted' :
+                                            item.remaining < 2 ? 'text-danger' :
+                                            item.remaining < 4 ? 'text-warning' :
+                                            'text-success'
+                                            ">
+                                {{item.remaining}} available</div>
+                            } @else {
+                            @if (item.remaining !== 0) {
+                            <div class="small fw-regular text-muted">{{item.remaining}} available</div>
+                            } @else {
+                            <div class="small fw-regular text-muted">Filled</div>}
+                            }
+                        </div>
+                    </ng-template>
+                </p-selectbutton>
+            </div>
+            <div>
+                <p class="text-muted small m-0 mb-2 fw-semibold">Day 3 - 16 March 2026</p>
+                <p-selectbutton id="activities-day2" [options]="day3Slots" multiple="true" styleClass="border rounded"
+                    class="d-flex flex-column flex-md-row flex-md-wrap gap-2 activities" formControlName="day3"
                     optionLabel="slot_time" optionValue="id" optionDisabled="disabled" [ngClass]="{
                     'p-invalid':
                         form.get('activities')?.errors?.['noDaysSelected'] &&

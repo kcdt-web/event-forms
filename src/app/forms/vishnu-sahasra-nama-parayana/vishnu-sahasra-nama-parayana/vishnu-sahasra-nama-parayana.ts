@@ -117,6 +117,7 @@ export class VishnuSahasraNamaParayana implements OnInit {
   registrationSuccess = false;
   searching = false;
   saving = false;
+  withdrawing = false;
   slotsSubmitted = false;
   isMobile = false;
 
@@ -685,7 +686,6 @@ export class VishnuSahasraNamaParayana implements OnInit {
     return refs;
   }
 
-
   get hasVsnpRegistrations(): boolean {
     return this.existingRegistrations.length > 0;
   }
@@ -711,6 +711,66 @@ export class VishnuSahasraNamaParayana implements OnInit {
         });
       }
     }, 0);
+  }
+
+  /**
+ * Confirms and fully withdraws the participant from Gayathri Havanam.
+ * This removes existing slots and ends the flow.
+ */
+  async confirmWithdraw(): Promise<void> {
+    const confirmed = window.confirm(
+      'You are about to withdraw from Gayathri Havanam.\n\n' +
+      'All your reserved slots will be permanently removed.\n\n' +
+      'Do you want to continue?'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    await this.withdrawCompletely();
+  }
+
+  /**
+ * Performs DELETE_VSNP and clears all GH-related state.
+ * Unlike Change Slot, this does NOT reinitialize slot selection.
+ */
+  private async withdrawCompletely(): Promise<void> {
+    try {
+      this.withdrawing = true;
+      this.submissionError = '';
+
+      const sourceReferences = this.getAllSourceReferences();
+      if (!sourceReferences.length) {
+        throw new Error('No participant found for withdrawal');
+      }
+
+      const resp = await fetch(environment.vsnpRegistrationsEdgeFunction, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'DELETE_VSNP',
+          source_reference: sourceReferences
+        })
+      });
+
+      const data = await resp.json();
+      if (!resp.ok || !data.success) {
+        throw new Error(data.error || 'Failed to withdraw');
+      }
+
+      this.resetForm();
+      this.scrollToTop();
+
+    } catch (err: any) {
+      this.submissionError = err.message || 'Withdrawal failed';
+      this.scrollToTop();
+    } finally {
+      this.withdrawing = false;
+      this.resetForm();
+      this.scrollToTop();
+      this.cd.detectChanges();
+    }
   }
 
 }

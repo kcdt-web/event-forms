@@ -7,7 +7,8 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const ORIGINS = ["https://kcdastrust.org"];
+// const ORIGINS = ["https://kcdastrust.org"];
+const ORIGINS = ["http://localhost:4200"];
 
 const RATE_LIMIT_WINDOW = 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 5;
@@ -92,8 +93,10 @@ serve(async (req) => {
     /* =========================
        Request body
     ========================= */
-    const { mobile_number, context } = await req.json();
+    const { mobile_number, kcdt_member_id, context } = await req.json();
+
     const isVsnpContext = context === "VSNP";
+    const isGhContext = context === "GH";
 
     if (!mobile_number) {
       return new Response(
@@ -102,18 +105,41 @@ serve(async (req) => {
       );
     }
 
+    if (isGhContext && !kcdt_member_id) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: "KCDT Member ID required for GH",
+        }),
+        { status: 400, headers: { "Access-Control-Allow-Origin": origin } }
+      );
+    }
+
     /* =========================
        Primary participant
     ========================= */
-    const { data: mainParticipant } = await supabase
+    let mainParticipantQuery = supabase
       .from("varanasi_events_primary_participants")
       .select("*")
-      .eq("mobile_number", mobile_number)
-      .single();
+      .eq("mobile_number", mobile_number);
+
+    if (isGhContext) {
+      mainParticipantQuery = mainParticipantQuery.eq(
+        "kcdt_member_id",
+        kcdt_member_id
+      );
+    }
+
+    const { data: mainParticipant } = await mainParticipantQuery.single();
 
     if (!mainParticipant) {
       return new Response(
-        JSON.stringify({ success: false, message: "Participant not found" }),
+        JSON.stringify({
+          success: false,
+          message: isGhContext
+            ? "Participant not found"
+            : "Participant not found",
+        }),
         { status: 404, headers: { "Access-Control-Allow-Origin": origin } }
       );
     }
@@ -146,8 +172,12 @@ serve(async (req) => {
        Participant map
     ========================= */
     const participantMap = new Map<number, string>();
-    if (filteredMain) participantMap.set(filteredMain.id, filteredMain.full_name);
-    filteredAccomp.forEach(p => participantMap.set(p.id, p.full_name));
+    if (filteredMain)
+      participantMap.set(filteredMain.id, filteredMain.full_name);
+    filteredAccomp.forEach(p =>
+      participantMap.set(p.id, p.full_name)
+    );
+
     const participantIds = [...participantMap.keys()];
 
     /* =========================
@@ -166,7 +196,7 @@ serve(async (req) => {
     ]);
 
     /* =========================
-       Slot resolution (ARRAY FIX)
+       Slot resolution
     ========================= */
     const vsnpSlotIds = new Set<number>();
     const ghSlotIds = new Set<number>();
@@ -177,9 +207,9 @@ serve(async (req) => {
     });
 
     ghRegs?.forEach(r => {
-      if (r.day1) ghSlotIds.add(Number(r.day1));
-      if (r.day2) ghSlotIds.add(Number(r.day2));
-      if (r.day3) ghSlotIds.add(Number(r.day3));
+      r.day1?.forEach((id: string) => ghSlotIds.add(Number(id)));
+      r.day2?.forEach((id: string) => ghSlotIds.add(Number(id)));
+      r.day3?.forEach((id: string) => ghSlotIds.add(Number(id)));
     });
 
     const [{ data: vsnpSlots }, { data: ghSlots }] = await Promise.all([
@@ -220,9 +250,27 @@ serve(async (req) => {
 
     const gh = (ghRegs || []).map(r => ({
       full_name: participantMap.get(r.source_reference),
-      day1: r.day1 ? ghSlotMap.get(Number(r.day1)) || "-" : "-",
-      day2: r.day2 ? ghSlotMap.get(Number(r.day2)) || "-" : "-",
-      day3: r.day3 ? ghSlotMap.get(Number(r.day3)) || "-" : "-",
+
+      day1: r.day1?.length
+        ? r.day1
+          .map((id: string) => ghSlotMap.get(Number(id)))
+          .filter(Boolean)
+          .join(", ")
+        : "-",
+
+      day2: r.day2?.length
+        ? r.day2
+          .map((id: string) => ghSlotMap.get(Number(id)))
+          .filter(Boolean)
+          .join(", ")
+        : "-",
+
+      day3: r.day3?.length
+        ? r.day3
+          .map((id: string) => ghSlotMap.get(Number(id)))
+          .filter(Boolean)
+          .join(", ")
+        : "-",
     }));
 
     /* =========================
