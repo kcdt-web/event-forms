@@ -304,7 +304,7 @@ export class VishnuSahasraNamaParayana implements OnInit {
         throw new Error(data.message || 'Participant not found');
       }
 
-      this.mainParticipant = data.mainParticipant;
+      this.mainParticipant = data.participant;
       this.accompanyingParticipant = data.accompParticipants;
       this.existingRegistrations = data.existingRegistrations || [];
       this.vsnp = data.vsnp || [];
