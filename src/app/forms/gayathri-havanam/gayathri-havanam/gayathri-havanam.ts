@@ -318,7 +318,7 @@ export class GayathriHavanam implements OnInit {
         throw new Error(data.message || 'Participant not found');
       }
 
-      this.mainParticipant = data.mainParticipant;
+      this.mainParticipant = data.participant;
       this.existingRegistrations = data.existingRegistrations || [];
       this.gh = data.gh || [];
       this.initParticipantSlots();
@@ -498,7 +498,6 @@ export class GayathriHavanam implements OnInit {
 
     try {
       const primary = this.primarySlots.getRawValue().activities;
-
       const resp = await fetch(environment.gayathriHavanamRegistrationEdgeFunction, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -571,7 +570,7 @@ export class GayathriHavanam implements OnInit {
  * Resets the entire form and clears all loaded participant and slot data.
  * Used when user wants to start over.
  */
-  resetForm(): void {
+  async resetForm(): Promise<void> {
     // Reset search form (member id, country, mobile)
     this.searchForm?.reset();
 
@@ -599,6 +598,7 @@ export class GayathriHavanam implements OnInit {
 
     // Scroll back to top for clean UX
     this.scrollToTop();
+    await this.loadSlotsAvailability();
 
     this.cd.detectChanges();
   }

@@ -572,7 +572,7 @@ export class VaranasiEvents implements OnInit {
       }
 
       // You now have participant data
-      this.mainParticipant = data.mainParticipant
+      this.mainParticipant = data.primaryParticipant
       this.accompanyingParticipant = data.accompParticipants
       this.loading = false;
 

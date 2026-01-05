@@ -57,14 +57,21 @@ serve(async (req) => {
     /* =========================
        Rate limiting
     ========================= */
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || "unknown";
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+      (req.conn as any)?.remoteAddr?.hostname ||
+      "unknown";
     const now = Date.now();
 
-    const { data: rateData } = await supabase
+    const { data: rateData, error: rateError } = await supabase
       .from("request_rate_limit")
       .select("*")
       .eq("ip", ip)
       .single();
+
+    if (rateError && rateError.code !== "PGRST116") {
+      throw rateError;
+    }
 
     if (rateData) {
       if (now - rateData.last_request < RATE_LIMIT_WINDOW) {
@@ -93,7 +100,7 @@ serve(async (req) => {
     /* =========================
        Request body
     ========================= */
-    const { mobile_number, kcdt_member_id, context } = await req.json();
+    const { mobile_number, kcdt_member_id, context, action } = await req.json();
 
     const isVsnpContext = context === "VSNP";
     const isGhContext = context === "GH";
@@ -130,17 +137,127 @@ serve(async (req) => {
       );
     }
 
-    const { data: mainParticipant } = await mainParticipantQuery.single();
+    let matchedRecord = null;
+    let matchedAs: "primary" | "accompanying" | null = null;
+    let primaryParticipant = null;
 
-    if (!mainParticipant) {
+    const { data: primary } = await mainParticipantQuery.single();
+
+    if (primary) {
+      matchedRecord = primary;
+      matchedAs = "primary";
+      primaryParticipant = primary;
+    } else if (isGhContext) {
+      // 2️⃣ Try accompanying lookup
+      const { data: accomp } = await supabase
+        .from("varanasi_event_accompanying_participants")
+        .select("*")
+        .eq("mobile_number", mobile_number)
+        .eq("kcdt_member_id", kcdt_member_id)
+        .single();
+
+      if (accomp) {
+        matchedRecord = accomp;
+        matchedAs = "accompanying";
+
+        // resolve real primary
+        const { data: parent } = await supabase
+          .from("varanasi_events_primary_participants")
+          .select("*")
+          .eq("id", accomp.main_participant_id)
+          .single();
+
+        primaryParticipant = parent;
+      }
+    }
+
+    /* =====================================================
+       VSNP: Check accompanying participant if not primary
+    ===================================================== */
+    if (isVsnpContext && matchedAs === null) {
+      const { data: accomp } = await supabase
+        .from("varanasi_event_accompanying_participants")
+        .select(
+          `
+          id,
+          main_participant_id,
+          varanasi_events_primary_participants (
+            full_name
+          )
+        `
+        )
+        .eq("mobile_number", mobile_number)
+        .single();
+
+      if (accomp?.varanasi_events_primary_participants?.full_name) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            message: `You are registered as an accompanying participant for ${accomp.varanasi_events_primary_participants.full_name}. Please contact them to complete the slot registration.`,
+          }),
+          {
+            status: 403,
+            headers: { "Access-Control-Allow-Origin": origin },
+          }
+        );
+      }
+    }
+
+    if (!matchedRecord || !primaryParticipant) {
       return new Response(
         JSON.stringify({
           success: false,
-          message: isGhContext
-            ? "Participant not found"
-            : "Participant not found",
+          message: "Participant not found",
         }),
         { status: 404, headers: { "Access-Control-Allow-Origin": origin } }
+      );
+    }
+
+    /* =========================
+      Withdraw logic
+    ========================= */
+    if (action === "withdraw") {
+      const withdrawal_date = new Date().toISOString();
+
+      // Withdraw primary participant
+      const { error: primaryWithdrawError } = await supabase
+        .from("varanasi_events_primary_participants")
+        .update({
+          status: "false",
+          withdrawal_date,
+        })
+        .eq("id", primaryParticipant.id)
+
+      if (primaryWithdrawError) {
+        throw primaryWithdrawError;
+      }
+
+      // Withdraw all accompanying participants
+      const { error: accompWithdrawError } = await supabase
+        .from("varanasi_event_accompanying_participants")
+        .update({
+          status: "false",
+          withdrawal_date,
+        })
+        .eq("main_participant_id", primaryParticipant.id)
+
+      if (accompWithdrawError) {
+        throw accompWithdrawError;
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Participant and accompanying members withdrawn successfully.",
+          withdrawal_date,
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": origin,
+          },
+        }
       );
     }
 
@@ -150,18 +267,28 @@ serve(async (req) => {
     const { data: accompParticipants = [] } = await supabase
       .from("varanasi_event_accompanying_participants")
       .select("*")
-      .eq("main_participant_id", mainParticipant.id);
+      .eq("main_participant_id", primaryParticipant.id);
 
     /* =========================
-       VSNP filter
+       VSNP validation
     ========================= */
-    let filteredMain = mainParticipant;
+    let filteredMain = primaryParticipant;
     let filteredAccomp = accompParticipants;
 
     if (isVsnpContext) {
-      filteredMain = hasVsnpActivity(mainParticipant.activities)
-        ? mainParticipant
-        : null;
+      if (!hasVsnpActivity(primaryParticipant.activities)) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            message:
+              "You are not registered for Vishnu Sahasra Nama Parayana activity.",
+          }),
+          {
+            status: 403,
+            headers: { "Access-Control-Allow-Origin": origin },
+          }
+        );
+      }
 
       filteredAccomp = accompParticipants.filter(p =>
         hasVsnpActivity(p.activities)
@@ -172,13 +299,12 @@ serve(async (req) => {
        Participant map
     ========================= */
     const participantMap = new Map<number, string>();
-    if (filteredMain)
-      participantMap.set(filteredMain.id, filteredMain.full_name);
+    participantMap.set(filteredMain.id, filteredMain.full_name);
     filteredAccomp.forEach(p =>
       participantMap.set(p.id, p.full_name)
     );
 
-    const participantIds = [...participantMap.keys()];
+    const registrationSourceIds = [matchedRecord.id];
 
     /* =========================
        Registrations
@@ -187,13 +313,14 @@ serve(async (req) => {
       supabase
         .from("vsnp_registrations")
         .select("source_reference, day1, day2")
-        .in("source_reference", participantIds),
+        .in("source_reference", registrationSourceIds),
 
       supabase
         .from("gh_registrations")
         .select("source_reference, day1, day2, day3")
-        .in("source_reference", participantIds),
+        .in("source_reference", registrationSourceIds),
     ]);
+
 
     /* =========================
        Slot resolution
@@ -232,45 +359,15 @@ serve(async (req) => {
     ========================= */
     const vsnp = (vsnpRegs || []).map(r => ({
       full_name: participantMap.get(r.source_reference),
-
-      day1: r.day1?.length
-        ? r.day1
-          .map((id: string) => vsnpSlotMap.get(Number(id)))
-          .filter(Boolean)
-          .join(", ")
-        : "-",
-
-      day2: r.day2?.length
-        ? r.day2
-          .map((id: string) => vsnpSlotMap.get(Number(id)))
-          .filter(Boolean)
-          .join(", ")
-        : "-",
+      day1: r.day1?.map(id => vsnpSlotMap.get(Number(id))).filter(Boolean).join(", ") || "-",
+      day2: r.day2?.map(id => vsnpSlotMap.get(Number(id))).filter(Boolean).join(", ") || "-",
     }));
 
     const gh = (ghRegs || []).map(r => ({
       full_name: participantMap.get(r.source_reference),
-
-      day1: r.day1?.length
-        ? r.day1
-          .map((id: string) => ghSlotMap.get(Number(id)))
-          .filter(Boolean)
-          .join(", ")
-        : "-",
-
-      day2: r.day2?.length
-        ? r.day2
-          .map((id: string) => ghSlotMap.get(Number(id)))
-          .filter(Boolean)
-          .join(", ")
-        : "-",
-
-      day3: r.day3?.length
-        ? r.day3
-          .map((id: string) => ghSlotMap.get(Number(id)))
-          .filter(Boolean)
-          .join(", ")
-        : "-",
+      day1: r.day1?.map(id => ghSlotMap.get(Number(id))).filter(Boolean).join(", ") || "-",
+      day2: r.day2?.map(id => ghSlotMap.get(Number(id))).filter(Boolean).join(", ") || "-",
+      day3: r.day3?.map(id => ghSlotMap.get(Number(id))).filter(Boolean).join(", ") || "-",
     }));
 
     /* =========================
@@ -279,7 +376,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        mainParticipant: filteredMain,
+        matchedAs,
+        participant: matchedRecord,
+        primaryParticipant: filteredMain,
         accompParticipants: filteredAccomp,
         vsnp,
         gh,

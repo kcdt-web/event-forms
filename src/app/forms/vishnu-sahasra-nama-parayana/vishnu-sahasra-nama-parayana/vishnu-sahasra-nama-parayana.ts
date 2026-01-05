@@ -522,7 +522,7 @@ export class VishnuSahasraNamaParayana implements OnInit {
 
   /* ======================= RESET ======================= */
 
-  resetForm(): void {
+  async resetForm(): Promise<void> {
     // Clear participants
     this.mainParticipant = null;
     this.accompanyingParticipant = [];
@@ -548,6 +548,8 @@ export class VishnuSahasraNamaParayana implements OnInit {
 
     this.invalidSearchNumber = false;
     this.mobileNumberErrorMsg = '';
+
+    await this.loadSlotsAvailability();
 
     this.cd.detectChanges();
   }
