@@ -172,28 +172,45 @@ serve(async (req) => {
     }
 
     /* =====================================================
-       VSNP: Check accompanying participant if not primary
+    VSNP: Check accompanying participants if not primary
     ===================================================== */
     if (isVsnpContext && matchedAs === null) {
-      const { data: accomp } = await supabase
+      const { data: accompList } = await supabase
         .from("varanasi_event_accompanying_participants")
-        .select(
-          `
-          id,
-          main_participant_id,
-          varanasi_events_primary_participants (
-            full_name
-          )
-        `
-        )
-        .eq("mobile_number", mobile_number)
-        .single();
+        .select(`
+      *,
+      varanasi_events_primary_participants (
+        id,
+        full_name
+      )
+    `)
+        .eq("mobile_number", mobile_number);
 
-      if (accomp?.varanasi_events_primary_participants?.full_name) {
+      if (accompList && accompList.length > 0) {
+        const vsnpAccompParticipants = accompList.filter(p =>
+          hasVsnpActivity(p.activities)
+        );
+
+        if (vsnpAccompParticipants.length > 0) {
+          const mainForAccomp =
+            vsnpAccompParticipants[0].varanasi_events_primary_participants;
+
+          return new Response(
+            JSON.stringify({
+              success: false,
+              message: `You are registered as an accompanying participant for ${mainForAccomp.full_name}. Please contact them to complete slot registration.`,
+            }),
+            {
+              status: 403,
+              headers: { "Access-Control-Allow-Origin": origin },
+            }
+          );
+        }
+
         return new Response(
           JSON.stringify({
             success: false,
-            message: `You are registered as an accompanying participant for ${accomp.varanasi_events_primary_participants.full_name}. Please contact them to complete the slot registration.`,
+            message: "You are not registered for Vishnu Sahasra Nama Parayana activity.",
           }),
           {
             status: 403,
@@ -201,16 +218,6 @@ serve(async (req) => {
           }
         );
       }
-    }
-
-    if (!matchedRecord || !primaryParticipant) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          message: "Participant not found",
-        }),
-        { status: 404, headers: { "Access-Control-Allow-Origin": origin } }
-      );
     }
 
     /* =========================
@@ -270,13 +277,32 @@ serve(async (req) => {
       .eq("main_participant_id", primaryParticipant.id);
 
     /* =========================
-       VSNP validation
+    VSNP validation
     ========================= */
     let filteredMain = primaryParticipant;
     let filteredAccomp = accompParticipants;
 
     if (isVsnpContext) {
-      if (!hasVsnpActivity(primaryParticipant.activities)) {
+      const primaryHasVsnp = hasVsnpActivity(primaryParticipant?.activities);
+
+      // Keep only accomp participants registered for VSNP
+      filteredAccomp = accompParticipants.filter(p =>
+        hasVsnpActivity(p.activities)
+      );
+
+      // Case 1: Primary NOT registered, but accompanying ARE registered
+      if (!primaryHasVsnp && filteredAccomp.length > 0) {
+        // Attach message to primaryParticipant, but continue to final response
+        filteredMain = {
+          ...primaryParticipant,
+          messages: [
+            "You are not registered for the Vishnu Sahasranama Parayana activity; however, some members accompanying you are. Please select the slots for them.",
+          ],
+        };
+      }
+
+      // Case 2: Neither primary nor accompanying are registered
+      if (!primaryHasVsnp && filteredAccomp.length === 0) {
         return new Response(
           JSON.stringify({
             success: false,
@@ -289,10 +315,6 @@ serve(async (req) => {
           }
         );
       }
-
-      filteredAccomp = accompParticipants.filter(p =>
-        hasVsnpActivity(p.activities)
-      );
     }
 
     /* =========================
@@ -304,7 +326,14 @@ serve(async (req) => {
       participantMap.set(p.id, p.full_name)
     );
 
-    const registrationSourceIds = [matchedRecord.id];
+    // const registrationSourceIds = [
+    //   primaryParticipant.id,
+    //   ...filteredAccomp.map(p => p.id),
+    // ];
+
+    const registrationSourceIds = isGhContext
+      ? [matchedRecord.id]
+      : [primaryParticipant.id, ...filteredAccomp.map(p => p.id)];
 
     /* =========================
        Registrations

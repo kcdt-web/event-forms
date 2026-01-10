@@ -189,9 +189,17 @@
             <div [class]="mainParticipant.status ? 'mb-4' : ''">
                 <p class="text-muted small m-0 mb-1">Accompanying Participants Registered for Vishnu Sahasra Nama
                     Parayana</p>
-                <p class="fw-semibold m-0">{{accompanyingParticipant.length || '0'}} Participants</p>
+                <p class="fw-semibold m-0">{{accompanyingParticipant.length || '0'}} Participant(s)</p>
             </div>
-            @if (mainParticipant.status && !hasExistingVsnp){
+
+            @if(mainParticipantMessages) {
+            <hr />
+            <div class="alert alert-danger">
+                {{mainParticipantMessages[0]}}
+            </div>
+            }
+
+            @if (mainParticipant.status && !hasExistingVsnp && !mainParticipantMessages){
             <hr />
             <div class="mb-4">
                 <div class="my-4">
@@ -210,12 +218,12 @@
                     Select at least one time slot for Day 1 or Day 2.
                 </div>
             </div>
-            @if (!noSlotsAvailable && accompanyingParticipant.length !== 0) {
+            
+            @if (!noSlotsAvailable && accompanyingParticipant.length !== 0 && !mainParticipantMessages) {
             <div>
                 <label class="fw-semibold mb-2 d-block">
                     Should these time slots be applied to all accompanying participants?
                 </label>
-
                 <p-selectbutton [options]="yesNoOptions" [formControl]="applyToAllAccompanying" optionLabel="label"
                     optionValue="value">
                 </p-selectbutton>
@@ -224,7 +232,7 @@
             }
         </p-panel>
 
-        <div *ngIf="!applyToAllAccompanying.value">
+        <div *ngIf="!applyToAllAccompanying.value && !hasExistingVsnp">
             <h5 class="m-0 mb-3">Select slots for accompanying participants</h5>
             <div *ngFor="let accomp of accompanyingParticipant; let i = index">
                 <p-panel [toggleable]="true" class="mb-4">

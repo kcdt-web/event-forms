@@ -48,6 +48,7 @@ interface Participant {
   status: boolean;
   country_code: string;
   mobile_number: string;
+  messages?: string[];
 }
 
 interface Option {
@@ -110,6 +111,7 @@ export class VishnuSahasraNamaParayana implements OnInit {
   vsnp: VSNPSelection[] = [];
 
   mainParticipant: Participant | null = null;
+  mainParticipantMessages: String | null = null;
   accompanyingParticipant: Participant[] = [];
 
   /* ======================= UI ======================= */
@@ -305,10 +307,12 @@ export class VishnuSahasraNamaParayana implements OnInit {
       }
 
       this.mainParticipant = data.participant;
+      this.mainParticipantMessages = data.primaryParticipant?.messages;
       this.accompanyingParticipant = data.accompParticipants;
       this.existingRegistrations = data.existingRegistrations || [];
       this.vsnp = data.vsnp || [];
       this.initParticipantSlots();
+
 
     } catch (err: any) {
       this.submissionError = err.message || 'Search failed';
@@ -364,6 +368,10 @@ export class VishnuSahasraNamaParayana implements OnInit {
         });
       }
     });
+
+    if (this.mainParticipantMessages) {
+      this.applyToAllAccompanying.setValue(false, { emitEvent: false });
+    }
 
   }
 
@@ -422,13 +430,16 @@ export class VishnuSahasraNamaParayana implements OnInit {
     this.slotsSubmitted = true;
     this.saving = true;
     this.submissionError = '';
-    this.primarySlots.markAllAsTouched();
+
+    if (!this.mainParticipantMessages) {
+      this.primarySlots.markAllAsTouched();
+    }
 
     if (!this.applyToAllAccompanying.value) {
       this.accompanyingSlots.forEach(g => g.markAllAsTouched());
     }
 
-    const primaryInvalid = this.primarySlots.invalid;
+    const primaryInvalid = !this.mainParticipantMessages && this.primarySlots.invalid;
 
     const accompanyingInvalid =
       !this.applyToAllAccompanying.value &&
@@ -448,8 +459,8 @@ export class VishnuSahasraNamaParayana implements OnInit {
       return;
     }
 
-    if (this.applyToAllAccompanying.value) {
-      const primary = this.primarySlots.getRawValue().activities;
+    if (this.applyToAllAccompanying.value && !this.mainParticipantMessages) {
+      const primary = this.primarySlots.get('activities')!.value;
       this.accompanyingSlots.forEach(g => {
         g.get('activities')!.setValue(primary, { emitEvent: false });
       });
@@ -457,16 +468,19 @@ export class VishnuSahasraNamaParayana implements OnInit {
 
     try {
       const payload: any[] = [];
-      const primary = this.primarySlots.getRawValue().activities;
-      payload.push({
-        kcdt_member_id: this.mainParticipant?.kcdt_member_id,
-        source_reference: this.mainParticipant?.id,
-        full_name: this.mainParticipant?.full_name,
-        country_code: this.mainParticipant?.country_code,
-        mobile_number: this.mainParticipant?.mobile_number,
-        day1: primary.day1,
-        day2: primary.day2
-      });
+
+      if (!this.mainParticipantMessages) {
+        const primary = this.primarySlots.getRawValue().activities;
+        payload.push({
+          kcdt_member_id: this.mainParticipant?.kcdt_member_id,
+          source_reference: this.mainParticipant?.id,
+          full_name: this.mainParticipant?.full_name,
+          country_code: this.mainParticipant?.country_code,
+          mobile_number: this.mainParticipant?.mobile_number,
+          day1: primary.day1,
+          day2: primary.day2
+        });
+      }
 
       this.accompanyingParticipant.forEach((p, i) => {
         const a = this.accompanyingSlots[i].getRawValue().activities;
@@ -576,11 +590,13 @@ export class VishnuSahasraNamaParayana implements OnInit {
     // Main participant
     const primaryActivities = this.primarySlots.getRawValue().activities;
 
-    rows.push({
-      full_name: this.mainParticipant.full_name,
-      day1: this.mapSlotIdsToTimes(primaryActivities.day1, this.day1Slots),
-      day2: this.mapSlotIdsToTimes(primaryActivities.day2, this.day2Slots),
-    });
+    if (!this.mainParticipantMessages) {
+      rows.push({
+        full_name: this.mainParticipant.full_name,
+        day1: this.mapSlotIdsToTimes(primaryActivities.day1, this.day1Slots),
+        day2: this.mapSlotIdsToTimes(primaryActivities.day2, this.day2Slots),
+      });
+    }
 
     // Accompanying participants
     this.accompanyingParticipant.forEach((p, i) => {
