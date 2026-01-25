@@ -52,7 +52,7 @@ interface Participant {
 }
 
 @Component({
-  selector: 'app-varanasi-events',
+  selector: 'app-varanasi-events-spl',
   templateUrl: './varanasi-events.html',
   styleUrls: ['./varanasi-events.scss'],
   imports: [
@@ -69,7 +69,7 @@ interface Participant {
     TagModule
   ],
 })
-export class VaranasiEvents implements OnInit {
+export class VaranasiEventsSpl implements OnInit {
   registerForm!: FormGroup;
   searchForm!: FormGroup;
   countriesList: Country[] = [];
@@ -85,7 +85,7 @@ export class VaranasiEvents implements OnInit {
   submitted = false;
   isMobile = false;
 
-  viewRegistration = true;
+  viewRegistration = false;
   invalidSearchNumber = false
   mainParticipant!: Participant | null;
   accompanyingParticipant!: Participant[];
@@ -419,7 +419,8 @@ export class VaranasiEvents implements OnInit {
       mobile_number: mainMobile.value,
       gender: this.registerForm.value.gender,
       activities: this.registerForm.value.activities,
-      status: true
+      status: true,
+      special_group: true
     };
 
     const accompData = this.accompanyingParticipants.controls.map((p) => {
@@ -433,7 +434,8 @@ export class VaranasiEvents implements OnInit {
         mobile_number: num,
         gender: p.value.gender,
         activities: p.value.activities,
-        status: true
+        status: true,
+        special_group: true
       };
     });
 

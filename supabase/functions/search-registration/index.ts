@@ -148,7 +148,6 @@ serve(async (req) => {
       matchedAs = "primary";
       primaryParticipant = primary;
     } else if (isGhContext) {
-      // 2️⃣ Try accompanying lookup
       const { data: accomp } = await supabase
         .from("varanasi_event_accompanying_participants")
         .select("*")
@@ -169,6 +168,19 @@ serve(async (req) => {
 
         primaryParticipant = parent;
       }
+    }
+
+    if (!matchedRecord || !primaryParticipant) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: "No participant found with the provided mobile number.",
+        }),
+        {
+          status: 404,
+          headers: { "Access-Control-Allow-Origin": origin },
+        }
+      );
     }
 
     /* =====================================================
