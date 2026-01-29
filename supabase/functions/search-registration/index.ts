@@ -100,7 +100,7 @@ serve(async (req) => {
     /* =========================
        Request body
     ========================= */
-    const { mobile_number, kcdt_member_id, context, action } = await req.json();
+    const { mobile_number, kcdt_member_id, context, action, participant_type, participant_id } = await req.json();
 
     const isVsnpContext = context === "VSNP";
     const isGhContext = context === "GH";
@@ -238,46 +238,81 @@ serve(async (req) => {
     if (action === "withdraw") {
       const withdrawal_date = new Date().toISOString();
 
-      // Withdraw primary participant
-      const { error: primaryWithdrawError } = await supabase
-        .from("varanasi_events_primary_participants")
-        .update({
-          status: "false",
-          withdrawal_date,
-        })
-        .eq("id", primaryParticipant.id)
+      // 🔹 GLOBAL withdrawal (existing behavior)
+      if (participant_type === "all") {
+        const { error: primaryWithdrawError } = await supabase
+          .from("varanasi_events_primary_participants")
+          .update({
+            status: "false",
+            withdrawal_date,
+          })
+          .eq("id", primaryParticipant.id);
 
-      if (primaryWithdrawError) {
-        throw primaryWithdrawError;
+        if (primaryWithdrawError) throw primaryWithdrawError;
+
+        const { error: accompWithdrawError } = await supabase
+          .from("varanasi_event_accompanying_participants")
+          .update({
+            status: "false",
+            withdrawal_date,
+          })
+          .eq("main_participant_id", primaryParticipant.id);
+
+        if (accompWithdrawError) throw accompWithdrawError;
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "All participants withdrawn successfully.",
+            withdrawal_date,
+          }),
+          { status: 200, headers: { "Access-Control-Allow-Origin": origin } }
+        );
       }
 
-      // Withdraw all accompanying participants
-      const { error: accompWithdrawError } = await supabase
-        .from("varanasi_event_accompanying_participants")
-        .update({
-          status: "false",
-          withdrawal_date,
-        })
-        .eq("main_participant_id", primaryParticipant.id)
+      // 🔹 Withdraw ONLY primary participant
+      if (participant_type === "primary") {
+        const { error } = await supabase
+          .from("varanasi_events_primary_participants")
+          .update({
+            status: "false",
+            withdrawal_date,
+          })
+          .eq("id", participant_id);
 
-      if (accompWithdrawError) {
-        throw accompWithdrawError;
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Participant withdrawn successfully.",
+            withdrawal_date,
+          }),
+          { status: 200, headers: { "Access-Control-Allow-Origin": origin } }
+        );
       }
 
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: "Participant and accompanying members withdrawn successfully.",
-          withdrawal_date,
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": origin,
-          },
-        }
-      );
+      // 🔹 Withdraw ONLY one accompanying participant
+      if (participant_type === "accompanying") {
+        const { error } = await supabase
+          .from("varanasi_event_accompanying_participants")
+          .update({
+            status: "false",
+            withdrawal_date,
+          })
+          .eq("id", participant_id);
+
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Participant withdrawn successfully.",
+            withdrawal_date,
+          }),
+          { status: 200, headers: { "Access-Control-Allow-Origin": origin } }
+        );
+      }
     }
 
     /* =========================

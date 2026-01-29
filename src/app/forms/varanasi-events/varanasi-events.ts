@@ -43,12 +43,20 @@ interface Option {
 }
 
 interface Participant {
+  id: string;
   registered_on: string;
   kcdt_member_id: number | null;
   full_name: string;
   activities: string[];
   status: boolean;
   mobile_number: string
+}
+
+interface WithdrawPayload {
+  mobile_number: string;
+  action: "withdraw";
+  participant_type: string;
+  participant_id?: number;
 }
 
 @Component({
@@ -84,6 +92,8 @@ export class VaranasiEvents implements OnInit {
   submissionError = '';
   submitted = false;
   isMobile = false;
+
+  loadingMap: { [key: string]: boolean } = {};
 
   viewRegistration = true;
   invalidSearchNumber = false
@@ -550,73 +560,54 @@ export class VaranasiEvents implements OnInit {
         return;
       }
 
-      const payload = {
-        mobile_number: mobileNumber ? mobileNumber : mobileCtrl?.value,
-        action: null,
-      };
-
-      const resp = await fetch(environment.searchEdgeFunction, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await resp.json();
-
-      if (!resp.ok || !data.success) {
-        setTimeout(() => {
-          this.scrollToTop();
-          this.cd.detectChanges();
-        }, 0);
-        throw new Error(data.message || 'Participant not found');
-      }
-
-      // You now have participant data
-      this.mainParticipant = data.primaryParticipant
-      this.accompanyingParticipant = data.accompParticipants
-      this.loading = false;
-
-      this.cd.detectChanges()
+      this.getParticipantDetails(mobileNumber, mobileCtrl);
 
     } catch (err: any) {
       this.submissionError = (err?.message || 'Unknown error');
-    } finally {
-      this.loading = false;
-      setTimeout(() => {
-        this.scrollToTop();
-        this.cd.detectChanges();
-      }, 0);
     }
   }
 
   /** Withdraw participant */
-  async withdrawRegistration(): Promise<void> {
+  async withdrawRegistration(participantType: string, participantId: any): Promise<void> {
 
     this.submissionError = '';
 
     if (!this.searchForm || !this.mainParticipant) return;
 
-    const confirmed = window.confirm(
-      `Withdrawing your participation will also remove all accompanying members. Are you sure you want to continue?`
-    );
-    if (!confirmed) return;
+    let key: string;
+    if (participantType === 'all') key = 'all';
+    else if (participantType === 'primary') key = 'primary';
+    else key = `accompanying-${participantId}`;
 
-    this.loading = true;
+    this.loadingMap[key] = true;
+
+    const confirmed = window.confirm(
+      participantType === 'all' ? 'Withdrawing your participation will also remove all accompanying members. Are you sure you want to continue?' : 'Are you sure you want to withdraw this participant from the event?'
+    );
+    if (!confirmed) {
+      this.loadingMap[key] = false;
+      return;
+    }
 
     try {
       // eCAPTCHA verification
       const verified = await this.validateRecaptcha.verifyRecaptcha();
       if (!verified) {
         this.submissionError = 'reCAPTCHA verification failed';
-        this.loading = false;
+        this.loadingMap[key] = false;
         this.cd.detectChanges()
         return;
       }
 
-      const payload = {
+      const payload: WithdrawPayload = {
         mobile_number: this.mainParticipant.mobile_number,
         action: "withdraw",
+        participant_type: participantType
       };
+
+      if (participantId != 0) {
+        payload.participant_id = participantId;
+      }
 
       const resp = await fetch(environment.searchEdgeFunction, {
         method: 'POST',
@@ -632,19 +623,58 @@ export class VaranasiEvents implements OnInit {
         }, 0); throw new Error(data.message || 'Withdrawal failed')
       };
 
-      this.mainParticipant.status = false;
-      this.loading = false;
-      this.cd.detectChanges()
+      await this.getParticipantDetails(this.mainParticipant.mobile_number, '')
 
     } catch (err: any) {
       this.submissionError = 'Withdrawal failed: ' + (err?.message || 'Unknown error');
     } finally {
-      this.loading = false;
+      this.loadingMap[key] = false;
+      this.cd.detectChanges();
+    }
+  }
+
+  async getParticipantDetails(mobileNumber: any, mobileCtrl?: any) {
+    const payload = {
+      mobile_number: mobileNumber ? mobileNumber : mobileCtrl?.value,
+      action: null,
+    };
+
+    const resp = await fetch(environment.searchEdgeFunction, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok || !data.success) {
       setTimeout(() => {
         this.scrollToTop();
         this.cd.detectChanges();
       }, 0);
+      throw new Error(data.message || 'Participant not found');
     }
+
+    // You now have participant data
+    this.mainParticipant = data.primaryParticipant
+    this.accompanyingParticipant = data.accompParticipants
+    this.loading = false;
+    this.cd.detectChanges()
+  }
+
+  get participantsSummary() {
+    const mainValue = this.mainParticipant ?? null;
+    const accompanyingValues = this.accompanyingParticipant ?? [];
+
+    const participants = [mainValue, ...accompanyingValues].filter(Boolean);
+
+    return participants.reduce(
+      (acc, p) => {
+        p?.status ? acc.active++ : acc.withdrawn++;
+        return acc;
+      },
+      { active: 0, withdrawn: 0 }
+    );
   }
 
 }

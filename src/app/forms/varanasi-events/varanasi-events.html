@@ -15,7 +15,9 @@
 </div>
 } @else {
 <h1>Be Part of the Varanasi Event — Register Now!</h1>
-<div class="alert alert-primary my-3">Thank you for your interest. Due to an overwhelming response, registrations are now closed as the venue has reached full capacity. If you are already registered, please search for your details below.</div>
+<div class="alert alert-primary my-3">Thank you for your interest. Due to an overwhelming response, registrations are
+    now closed as the venue has reached full capacity. If you are already registered, please search for your details
+    below.</div>
 
 @if (!viewRegistration) {
 <div class="mb-4"><span class="fw-semibold">Already registered?</span><p-button
@@ -317,22 +319,16 @@
             </div>
             <div class="mb-4">
                 <p class="text-muted small m-0 mb-1">Registration Status</p>
-                <p class="fw-semibold m-0">
-                    @if (mainParticipant.status) {
-                    <p-tag severity="success" value="Active" />
-                    } @else {
-                    <p-tag severity="danger" value="Withdrawn" />
-                    }
-                </p>
-            </div>
-            <div [class]="mainParticipant.status ? 'mb-4' : ''">
-                <p class="text-muted small m-0 mb-1">Accompanying Participants</p>
-                <p class="fw-semibold m-0">{{accompanyingParticipant.length || '0'}}</p>
+                <div class="d-flex gap-2">
+                    <p-tag severity="info" value="{{ accompanyingParticipant.length + 1 }} Participants" />
+                    <p-tag severity="success" value="{{ participantsSummary.active }} Active" />
+                    <p-tag severity="danger" value="{{ participantsSummary.withdrawn }} Withdrawn" />
+                </div>
             </div>
 
-            @if (mainParticipant.status){
-            <p-button label="Withdraw" variant="outlined" severity="danger" (click)="withdrawRegistration()"
-                [loading]="loading" />
+            @if (mainParticipant.status && (participantsSummary.withdrawn !== accompanyingParticipant.length)){
+            <p-button label="Withdraw all" variant="outlined" severity="danger" (click)="withdrawRegistration('all', 0)"
+                [loading]="loadingMap['all']" />
             }
         </p-panel>
 
@@ -344,10 +340,24 @@
                     <div class="text-muted small">Primary Participant</div>
                 </div>
             </ng-template>
+            <div class="mb-4">
+                <p class="text-muted small m-0 mb-1">Registration Status</p>
+                <p class="fw-semibold m-0">
+                    @if (mainParticipant.status) {
+                    <p-tag severity="success" value="Active" />
+                    } @else {
+                    <p-tag severity="danger" value="Withdrawn" />
+                    }
+                </p>
+            </div>
             <p class="fw-semibold">Opted Activities</p>
             <ul>
                 <li *ngFor="let activity of mainParticipant.activities">{{activity}}</li>
             </ul>
+            @if (mainParticipant.status){
+            <p-button label="Withdraw" variant="outlined" severity="danger"
+                (click)="withdrawRegistration('primary', mainParticipant.id)" [loading]="loadingMap['primary']" />
+            }
         </p-panel>
 
         <div *ngFor="let accomp of accompanyingParticipant;let i=index">
@@ -358,10 +368,25 @@
                         <div class="text-muted small">Accompanying Participant {{ (i + 1)}}</div>
                     </div>
                 </ng-template>
+                <div class="mb-4">
+                    <p class="text-muted small m-0 mb-1">Registration Status</p>
+                    <p class="fw-semibold m-0">
+                        @if (accomp.status) {
+                        <p-tag severity="success" value="Active" />
+                        } @else {
+                        <p-tag severity="danger" value="Withdrawn" />
+                        }
+                    </p>
+                </div>
                 <p class="fw-semibold">Opted Activities</p>
                 <ul>
                     <li *ngFor="let activity of accomp.activities">{{activity}}</li>
                 </ul>
+                @if (accomp.status){
+                <p-button label="Withdraw" variant="outlined" severity="danger"
+                    (click)="withdrawRegistration('accompanying', accomp.id)"
+                    [loading]="loadingMap['accompanying-' + accomp.id]" />
+                }
             </p-panel>
         </div>
     </fieldset>
